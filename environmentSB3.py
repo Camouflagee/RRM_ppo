@@ -49,13 +49,12 @@ class EnvironmentSB3(Environment):
         H_dB = self.history_channel_information.reshape((self.sce.nUEs, self.sce.nRBs),)
 
         for b_index, b in enumerate(self.BSs):
-            for local_u_index, (s_a_b_k_u) in enumerate():
-                global_u_index = b.UE_set[local_u_index] - 1
+            for global_u_index in range(self.nUE):
                 for rb_index in range(self.sce.nRBs):
                     a_b_k_u = action[global_u_index, rb_index] # todo working right now
                     _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
                     signal_power_set[rb_index][global_u_index] +=  a_b_k_u * b.Transmit_Power() / (
-                            10 ** (H_dB[b_index, global_u_index, rb_index] / 10))
+                            10 ** (H_dB[global_u_index, rb_index] / 10))
                     # 注意 H_dB 是 fading - pathloss
                     channal_power_set[b_index][global_u_index][rb_index] = channel_power_dBm
 
