@@ -36,9 +36,8 @@ env = TimeLimit(env, max_episode_steps=episode_length)
 if _load_model:
     model = PPO.load(
         path=
-'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250106time155815\model_saves\eval_best_model\\best_model.zip'        ,
-        env=env,
-        **tr_args,
+'D:\PythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250106time171834\model_saves\eval_best_model\\best_model.zip',        env=env,
+        device='cpu',**tr_args,
     )
 else:
     model = PPO(policy="MlpPolicy", env=env, verbose=1, device='cpu', **tr_args, )
@@ -63,7 +62,7 @@ logger = configure(log_folder, ["tensorboard", "stdout", "csv"])
 model.set_logger(logger)
 
 # train the model
-model.learn(total_timesteps=episode_length * 500, progress_bar=True, log_interval=1,
+model.learn(total_timesteps=episode_length * 5000, progress_bar=True, log_interval=1,
             callback=eval_callback,
             reset_num_timesteps=False)
 # save model
