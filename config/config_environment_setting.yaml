@@ -17,23 +17,7 @@
 "N0": -174 #dBm
 "QoS_thr": 5
 "fc": 6
-
 "Nb" : 10 # max number of user associated by one BS
 "rbg_Nb": 3 # max number of RBG occupied by one user
 
-"prt": 0
-"nagents": 30
-"capacity": 500
-"learningrate": 0.01
-"momentum": 0.005
-"eps_max": 0.9
-"eps_min": 0.0
-"eps_decay": 200
-"eps_increment": 0.003
-"batch_size": 8
-"gamma": 0.9
-"nepisodes": 10
-"nsteps": 500
-"nupdate": 50
-"cuda": 0
-"mixing_embed_dim": 64
+

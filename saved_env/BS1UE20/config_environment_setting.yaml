@@ -1,0 +1,23 @@
+"nUEs": 20
+"nRBs": 10
+"nMBS": 0
+"nPBS": 1
+"nFBS": 0
+"rMBS": ~
+"rPBS": 400
+"rFBS": ~
+"x_max": 1000
+"y_max": 1000
+"bsloclist": [[250,500],[750,500]]
+"txpowerMBSdBm": ~
+"txpowerPBSdBm": 50
+"txpowerFBSdBm": ~
+"BW": 180000
+"nChannel": 20
+"N0": -174 #dBm
+"QoS_thr": 5
+"fc": 6
+"Nb" : 10 # max number of user associated by one BS
+"rbg_Nb": 3 # max number of RBG occupied by one user
+
+

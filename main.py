@@ -1,73 +1,74 @@
+import copy
 import gymnasium as gym
 import yaml
-import os
-from datetime import datetime
+from gymnasium.wrappers import TimeLimit
+from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.logger import configure
+from stable_baselines3.common.monitor import Monitor
 
 from environmentSB3 import EnvironmentSB3
 from stable_baselines3 import PPO
+from utils import *
 
-class DotDic(dict):
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
-
-    def __deepcopy__(self, memo=None):
-        return DotDic(copy.deepcopy(dict(self), memo=memo))
-
-    def __getstate__(self):
-        return self.__dict__.copy()
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-
-def get_log_eval_dir(log_root: str = 'Experiment_result', model_name: str = 'FACMAC', args: str = 'args1',
-                     time_str: str = None, info_str: str = ''):
-    """
-    :param info_str:
-    :param log_root:
-    :param model_name:
-    :param args:
-    :param time_str:
-    :return: log_folder, eval_log_dir
-    """
-
-    if time_str is None:
-        now = datetime.now()
-        time_str = now.strftime("date%Y%m%dtime%H%M%S")
-    # f"./{log_root}/{model_name}/{args}/{time_str}" + info_str
-    log_folder = os.path.join(log_root,model_name,args,time_str+info_str)
-    eval_log_dir = os.path.join(log_root,model_name,args,time_str+info_str,'model_saves','eval_best_model')
-            # f'./{log_root}/{model_name}/{args}/{time_str}' + info_str + '/model_saves/eval_best_model/'
-
-    return log_folder, eval_log_dir
-
-
-# load or create environment
-# 1. load configuration
-
-with open('config_environment_setting.yaml', 'r') as file:
-    cfg = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-
-env = EnvironmentSB3(cfg)
-
-# load or create model
-
-# train model
-model = PPO("MlpPolicy", env, verbose=1, device='cpu')
-model.learn(total_timesteps=10_0000)
-model.save('log/model/1')
+expName = 'BS1UE20'
+expNo = 'E1'  # same expNo has same initialized model parameters
+_version = 'PPO'
+episode_length = 1200
+_load_env = 1
+_load_model = 1
 
 log_folder, eval_log_dir = get_log_eval_dir(
     model_name=_version,
     args=os.path.join(expName, expNo),
     info_str=f'')
+# load or create environment/model
+with open('config/config_environment_setting.yaml', 'r') as file:
+    env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
+with open('config/config_training_parameters.yaml', 'r') as file:
+    tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
+if _load_env:
+    env = load_env('saved_env/BS1UE20/env.zip')
+else:
+    env = EnvironmentSB3(env_args)
+    save_model_env(log_folder, _version, '', None, env)
+env = TimeLimit(env, max_episode_steps=episode_length)
 
-# vec_env = model.get_env()
-# obs = vec_env.reset()
-# for i in range(1000):
-#     action, _state = model.predict(obs, deterministic=True)
-#     obs, reward, done, info = vec_env.step(action)
-#     vec_env.render("human")
-#     # VecEnv resets automatically
-#     # if done:
-#     #   obs = vec_env.reset()
+if _load_model:
+    model = PPO.load(
+        path=
+'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250106time155815\model_saves\eval_best_model\\best_model.zip'        ,
+        env=env,
+        **tr_args,
+    )
+else:
+    model = PPO(policy="MlpPolicy", env=env, verbose=1, device='cpu', **tr_args, )
+
+if not os.path.exists(log_folder):
+    os.makedirs(log_folder)
+# ---- save training script
+# import shutil
+# src_path = 'Experiment_result/FACMAC7/2BS10UE/script_new_training_2BS10UE.py'
+# dest_path = os.path.join(log_folder, f'script_training.py')
+# shutil.copy(src_path, dest_path)
+# print(f"文件已经成功从 {src_path} 复制到 {dest_path}")
+with open(os.path.join(log_folder, 'config_training_parameters.yaml'), 'w') as file:
+    yaml.dump(tr_args, file)
+# set eval callback, the action in evaluation mode is determined by the mean of distribution.
+eval_callback = EvalCallback(Monitor(copy.deepcopy(env)), best_model_save_path=eval_log_dir,
+                             eval_freq=episode_length,
+                             n_eval_episodes=1, deterministic=True,
+                             render=False, verbose=1, )  # log_path=eval_log_dir,
+# set logger
+logger = configure(log_folder, ["tensorboard", "stdout", "csv"])
+model.set_logger(logger)
+
+# train the model
+model.learn(total_timesteps=episode_length * 500, progress_bar=True, log_interval=1,
+            callback=eval_callback,
+            reset_num_timesteps=False)
+# save model
+save_model_env(log_folder, _version, '', model, None)
+print('training is done')
+
+print('system will be shut down in 300s')
+system_shutdown(300)
