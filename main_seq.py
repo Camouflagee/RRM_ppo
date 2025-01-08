@@ -1,3 +1,4 @@
+# training script of SequencePPO
 import copy
 import gymnasium as gym
 import yaml
@@ -6,16 +7,18 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 
-from environmentSB3 import EnvironmentSB3
+from environmentSB3 import EnvironmentSB3, SequenceDecisionEnvironmentSB3
 from stable_baselines3 import PPO
+
+from policy.sequence_ppo import SequencePPO
 from utils import *
 
 expName = 'BS1UE20'
 expNo = 'E1'  # same expNo has same initialized model parameters
-_version = 'PPO'
+_version = 'seqPPO'
 episode_length = 1200
 _load_env = 1
-_load_model = 1
+_load_model = 0
 
 log_folder, eval_log_dir = get_log_eval_dir(
     model_name=_version,
@@ -26,23 +29,23 @@ with open('config/config_environment_setting.yaml', 'r') as file:
     env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
 with open('config/config_training_parameters.yaml', 'r') as file:
     tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
+
 if _load_env:
-    env = load_env('saved_env/BS1UE20/env.zip')
+    env = load_env('saved_env/BS1UE20/SeqEnv.zip')
 else:
-    env = EnvironmentSB3(env_args)
+    env = SequenceDecisionEnvironmentSB3(env_args)
     save_model_env(log_folder, _version, '', None, env)
-env = TimeLimit(env, max_episode_steps=episode_length)
+env = TimeLimit(env, max_episode_steps=episode_length * env.maxcnt)
 
 if _load_model:
     model = PPO.load(
         path=
-'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250107time131838\model_saves\eval_best_model\\best_model.zip',
-
+        'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250106time171834\model_saves\eval_best_model\\best_model.zip',
         env=env,
         **tr_args,
     )
 else:
-    model = PPO(policy="MlpPolicy", env=env, verbose=1, device='cpu', **tr_args, )
+    model = SequencePPO("MlpPolicy", env, verbose=1, device='cpu', **tr_args, )
 
 if not os.path.exists(log_folder):
     os.makedirs(log_folder)
@@ -64,13 +67,12 @@ logger = configure(log_folder, ["tensorboard", "stdout", "csv"])
 model.set_logger(logger)
 
 # train the model
-model.learn(total_timesteps=episode_length * 500, progress_bar=True, log_interval=1,
-            callback=eval_callback,
+model.learn(total_timesteps=episode_length*env.maxcnt * 50, progress_bar=True, log_interval=1,
+            # callback=eval_callback,
             reset_num_timesteps=False)
-# early stop code : total_timesteps = self.num_timesteps + 2400
 # save model
-save_model_env(log_folder, _version, '', model, None)
-print('training is done')
-
-print('system will be shut down in 300s')
-system_shutdown(300)
+# save_model_env(log_folder, _version, '', model, None)
+# print('training is done')
+#
+# print('system will be shut down in 300s')
+# system_shutdown(300)
