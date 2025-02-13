@@ -10,13 +10,17 @@ from stable_baselines3.common.monitor import Monitor
 from environmentSB3 import EnvironmentSB3, SequenceDecisionEnvironmentSB3
 from stable_baselines3 import PPO
 
+from module.mycallbacks import SeqPPOEvalCallback
 from policy.sequence_ppo import SequencePPO
 from utils import *
+import warnings
 
+warnings.filterwarnings("ignore")
 expName = 'BS1UE20'
-expNo = 'E1'  # same expNo has same initialized model parameters
+
+expNo = 'E3'  # same expNo has same initialized model parameters
 _version = 'seqPPO'
-episode_length = 1200
+episode_length = 50
 _load_env = 1
 _load_model = 0
 
@@ -31,21 +35,47 @@ with open('config/config_training_parameters.yaml', 'r') as file:
     tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
 
 if _load_env:
-    env = load_env('saved_env/BS1UE20/SeqEnv.zip')
+    unwrapped_env = load_env('saved_env/BS1UE20/Env.zip')
+    # init_env=SequenceDecisionEnvironmentSB3(env_args)
+    # init_env.__setstate__(unwrapped_env.__getstate__())
+    # unwrapped_env = init_env
 else:
-    env = SequenceDecisionEnvironmentSB3(env_args)
-    save_model_env(log_folder, _version, '', None, env)
-env = TimeLimit(env, max_episode_steps=episode_length * env.maxcnt)
+    unwrapped_env = SequenceDecisionEnvironmentSB3(env_args)
+    save_model_env(log_folder, _version, '', None, unwrapped_env)
+
+env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
 
 if _load_model:
-    model = PPO.load(
+    model = SequencePPO.load(
         path=
-        'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250106time171834\model_saves\eval_best_model\\best_model.zip',
+        'Experiment_result/seqPPO/BS1UE20/E2/date20250207time160611/model_saves/seqPPO_NumSteps_251904.zip',
         env=env,
         **tr_args,
     )
 else:
     model = SequencePPO("MlpPolicy", env, verbose=1, device='cpu', **tr_args, )
+
+# ----------------------manually test the model-------------------------
+# test_env = TimeLimit(unwrapped_env, max_episode_steps=100)
+# action_list = []
+# for _ in range(10):
+#     obs, _ = test_env.reset()
+#     truncated = False
+#     rbue_pair_path = []
+#     print('action_path: ', end="")
+#     while not truncated:
+#         action, _ = model.predict(observation=obs, deterministic=False)
+#         obs, reward, terminated, truncated, info = test_env.step(action)
+#         print(action, end=",")
+#         rbue_pair_path.append(action)
+#         if truncated:
+#             # print(env.history_action)
+#             print()
+#             print(f"reward: {reward:.2f}", )
+#             action_list.append({'act': rbue_pair_path,
+#                                 'reward': reward}
+#                                )
+# ----------------------------------------------------------------------------------------------
 
 if not os.path.exists(log_folder):
     os.makedirs(log_folder)
@@ -55,24 +85,32 @@ if not os.path.exists(log_folder):
 # dest_path = os.path.join(log_folder, f'script_training.py')
 # shutil.copy(src_path, dest_path)
 # print(f"文件已经成功从 {src_path} 复制到 {dest_path}")
+
 with open(os.path.join(log_folder, 'config_training_parameters.yaml'), 'w') as file:
     yaml.dump(tr_args, file)
 # set eval callback, the action in evaluation mode is determined by the mean of distribution.
-eval_callback = EvalCallback(Monitor(copy.deepcopy(env)), best_model_save_path=eval_log_dir,
-                             eval_freq=episode_length,
-                             n_eval_episodes=1, deterministic=True,
-                             render=False, verbose=1, )  # log_path=eval_log_dir,
+eval_callback = SeqPPOEvalCallback(eval_env=Monitor(copy.deepcopy(env)),
+                                   best_model_save_path=eval_log_dir,
+                                   eval_freq=episode_length*10,
+                                   n_eval_episodes=2, deterministic=False,
+                                   render=False, verbose=1,
+                                   )
 # set logger
 logger = configure(log_folder, ["tensorboard", "stdout", "csv"])
 model.set_logger(logger)
 
 # train the model
-model.learn(total_timesteps=episode_length*env.maxcnt * 50, progress_bar=True, log_interval=1,
-            # callback=eval_callback,
+model.learn(total_timesteps=episode_length * 5000, progress_bar=True, log_interval=10,
+            callback=eval_callback,
             reset_num_timesteps=False)
+
 # save model
-# save_model_env(log_folder, _version, '', model, None)
-# print('training is done')
+save_model_env(log_folder, _version, '', model, None)
+print('training is done')
+
+
+# todo 模型输出的pair最大长度是否可以让模型自己决定?
+
 #
 # print('system will be shut down in 300s')
 # system_shutdown(300)

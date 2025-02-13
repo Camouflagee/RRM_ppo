@@ -6,7 +6,7 @@ from module.rl_utils import get_log_eval_dir, learning_rate_schedule, save_model
     DotDic
 from module.facmac7 import FACMACbase
 import warnings
-from module.callback import MyEvalCallback
+from module.mycallbacks import MyEvalCallback
 # check list
 # env create new or load exist one
 # log folder

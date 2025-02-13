@@ -152,7 +152,9 @@ class Environment(gym.Env):
         self.seed = 777
         self.sce = sce
         self.BS_num = self.sce.nMBS + self.sce.nPBS + self.sce.nFBS
-
+        self.nBS = self.BS_num
+        self.nRB = self.sce.nRB
+        self.nUE = self.sce.nUE
         self.BSs = self.BS_Init()
         self.UEs = self.UE_Init()
         self.user_candidate_assignment()

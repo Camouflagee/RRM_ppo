@@ -104,8 +104,8 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # note: Given the whole channel state information (observation_space), the agent outputs One UE-RBG pair in each step.
 
         super().__init__(args)
-        self.history_channel_information = None
-        self.history_action = None
+        self._history_channel_information = None
+        self._history_action = None
 
         self.cnt = 0  # this count is designed for determining the maximum output pair of the decision sequence.
         self.maxcnt = 50
@@ -149,8 +149,8 @@ class SequenceDecisionEnvironmentSB3(Environment):
         else:
             channal_power_set = None
 
-        assert self.history_channel_information is not None
-        H_dB = self.history_channel_information.reshape((self.sce.nUEs, self.sce.nRBs), )
+        assert self._history_channel_information is not None
+        H_dB = self._history_channel_information.reshape((self.sce.nUEs, self.sce.nRBs), )
 
         for b_index, b in enumerate(self.BSs):
             for global_u_index in range(self.nUE):  # notice that UE_id starts from 1
@@ -174,20 +174,20 @@ class SequenceDecisionEnvironmentSB3(Environment):
 
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
-        self.history_action[action] = 1
-        debugg=sum(self.history_action)
-        # if self.cnt >= self.maxcnt:
-        #     total_rate, channal_power_set = self.cal_sumrate(self.history_action, get_new_CSI=True)
-        #     # update the CSI of environment
-        #     self.history_channel_information = channal_power_set.reshape(-1, )
-        #     self.history_action = np.zeros_like(self.history_channel_information)
-        #     self.cnt = 0
-        # else:
-        total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
-        # self.history_channel_information don't change
-        self.cnt += 1
+        self._history_action[action] = 1
+
+        if self.cnt >= self.maxcnt:
+            total_rate, channal_power_set = self.cal_sumrate(self._history_action, get_new_CSI=True)
+            # update the CSI of environment
+            self._history_channel_information = channal_power_set.reshape(-1, )
+            self._history_action = np.zeros_like(self._history_channel_information)
+            self.cnt = 0
+        else:
+            total_rate, _ = self.cal_sumrate(self._history_action, get_new_CSI=False)
+            # self.history_channel_information don't change
+            self.cnt += 1
         reward = total_rate
-        new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)
+        new_obs = np.concatenate([self._history_channel_information, self._history_action.reshape(-1, )], axis=-1)
         terminated, truncated, info = False, False, {}
         return new_obs, reward, terminated, truncated, info
 
@@ -203,11 +203,11 @@ class SequenceDecisionEnvironmentSB3(Environment):
                     channal_power_set[global_u_index][rb_index] = channel_power
 
         H = channal_power_set.reshape(-1, )
-        self.history_channel_information = H
+        self._history_channel_information = H
 
         empty_action = np.zeros_like(H)
         obs = np.concatenate([H, empty_action], axis=-1)
-        self.history_action = empty_action
+        self._history_action = empty_action
         observation, info = np.array(obs), {}
         self.cnt = 0
         return observation, info
