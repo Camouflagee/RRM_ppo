@@ -74,3 +74,10 @@ print('training is done')
 
 print('system will be shut down in 300s')
 system_shutdown(300)
+
+# # ##### fix random seeds for reproducibility ########
+# SEED = args.seed
+# torch.manual_seed(SEED)
+# torch.backends.cudnn.deterministic = False
+# torch.backends.cudnn.benchmark = False
+# np.random.seed(SEED)
