@@ -160,12 +160,12 @@ class Environment(gym.Env):
         self.user_candidate_assignment()
 
         if sce.prt:
-            self.configuration_visualization()
+            self.showmap()
 
     def __setstate__(self, state):
         self.__dict__.update(state)
 
-    def configuration_visualization(self, path: str = None):
+    def showmap(self, path: str = None):
         """
         Visualize the base and user location
         :param path:  path to save the figure

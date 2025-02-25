@@ -104,41 +104,58 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # note: Given the whole channel state information (observation_space), the agent outputs One UE-RBG pair in each step.
 
         super().__init__(args)
-        self.history_channel_information = None
+        self.history_channel_information = None # unit: dBm
         self.history_action = None
-
         self.cnt = 0  # this count is designed for determining the maximum output pair of the decision sequence.
         self.maxcnt = 50
         self.dtype = np.float32
-        self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
+        self.set_obs_act_space()
+        # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
+        #
+        # for b_index, b in enumerate(self.BSs):
+        #     for ue_index, ue in enumerate(self.UEs):
+        #         Loc_diff = b.Get_Location() - ue.Get_Location()
+        #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
 
+        # self.nUE = args.nUEs
+        # self.nRB = args.nRBs
+        # # action: one UE*RB pair
+        # self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB, start=0)
+        # # obs: [Channel state information + action dimension (last decision pair)]
+        # self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2,),
+        #                                             dtype=self.dtype)
+    def set_obs_act_space(self):
+        # set obs and action space based on env's info
+        self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
         for b_index, b in enumerate(self.BSs):
             for ue_index, ue in enumerate(self.UEs):
                 Loc_diff = b.Get_Location() - ue.Get_Location()
                 self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
-
-        self.nUE = args.nUEs
-        self.nRB = args.nRBs
+        self.nUE = self.sce.nUEs
+        self.nRB = self.sce.nRBs
         # action: one UE*RB pair
         self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB, start=0)
         # obs: [Channel state information + action dimension (last decision pair)]
         self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2,),
                                                     dtype=self.dtype)
-
     def __getstate__(self):
         state = copy.deepcopy(self.__dict__)
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.set_obs_act_space()
 
+    def get_n0(self):
+        # return the environmental noise # note: not dB
+        return 10 ** (self.sce.N0 / 10) * self.sce.BW
     def cal_sumrate(self, rbg_decision, get_new_CSI=False):
         """
         compute the sum rate of the whole network given the RBG allocation action
         :param action: RBG allocation decision, dimension: |UE|*|RBG|
         :return: total sum-rate (i.e. log(1+SINR) ) of the communication network
         """
-        Noise = 10 ** (self.sce.N0 / 10) * self.sce.BW  # Calculate the noise
+        Noise = self.get_n0()  # Calculate the noise
 
         action = rbg_decision
         # self.history_action[index_action//self.nRB, index_action%self.nRB] = 1
@@ -203,11 +220,31 @@ class SequenceDecisionEnvironmentSB3(Environment):
                     channal_power_set[global_u_index][rb_index] = channel_power
 
         H = channal_power_set.reshape(-1, )
-        self.history_channel_information = H
+        self.history_channel_information = H # dBm
 
         empty_action = np.zeros_like(H)
         obs = np.concatenate([H, empty_action], axis=-1)
         self.history_action = empty_action
         observation, info = np.array(obs), {}
+        self.cnt = 0
+        return observation, info
+    def reset_onlyforbaseline(self, seed=None, options=None):
+        # action = self.action_space.sample().reshape(self.nUE, self.nRB)
+        # todo can we optimize this code ?
+        channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
+        for b_index, b in enumerate(self.BSs):
+            for global_u_index in range(self.nUE):
+                for rb_index in range(self.nRB):
+                    signal_power, channel_power \
+                        = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                    channal_power_set[global_u_index][rb_index] = channel_power
+
+        H = channal_power_set.reshape(-1, )
+        self.history_channel_information = H
+
+        empty_action = np.zeros_like(H)
+        obs = np.concatenate([H, empty_action], axis=-1)
+        self.history_action = empty_action
+        observation, info = np.array(obs), {'CSI': H}
         self.cnt = 0
         return observation, info

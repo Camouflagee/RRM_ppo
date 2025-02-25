@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings("ignore")
 expName = 'BS1UE20'
 
-expNo = 'E3'  # same expNo has same initialized model parameters
+expNo = 'E2'  # same expNo has same initialized model parameters
 _version = 'seqPPO'
 episode_length = 50
 _load_env = 1
@@ -36,9 +36,9 @@ with open('config/config_training_parameters.yaml', 'r') as file:
 
 if _load_env:
     unwrapped_env = load_env('saved_env/BS1UE20/Env.zip')
-    # init_env=SequenceDecisionEnvironmentSB3(env_args)
-    # init_env.__setstate__(unwrapped_env.__getstate__())
-    # unwrapped_env = init_env
+    init_env=SequenceDecisionEnvironmentSB3(env_args)
+    init_env.__setstate__(unwrapped_env.__getstate__())
+    unwrapped_env = init_env
 else:
     unwrapped_env = SequenceDecisionEnvironmentSB3(env_args)
     save_model_env(log_folder, _version, '', None, unwrapped_env)
