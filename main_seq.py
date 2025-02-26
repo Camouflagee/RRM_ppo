@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings("ignore")
 expName = 'BS1UE20'
 
-expNo = 'E2'  # same expNo has same initialized model parameters
+expNo = 'E9'  # same expNo has same initialized model parameters
 _version = 'seqPPO'
 episode_length = 50
 _load_env = 1

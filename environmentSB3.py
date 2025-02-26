@@ -188,7 +188,44 @@ class SequenceDecisionEnvironmentSB3(Environment):
         total_rate = self.sce.BW * np.sum(unscale_rate_m) / (10 ** 6)
 
         return total_rate, channal_power_set
+    def cal_sumrate_givenH(self, rbg_decision, H, get_new_CSI=False):
+        """
+        compute the sum rate of the whole network given the RBG allocation action
+        :param action: RBG allocation decision, dimension: |UE|*|RBG|
+        :return: total sum-rate (i.e. log(1+SINR) ) of the communication network
+        """
+        Noise = self.get_n0()  # Calculate the noise
 
+        action = rbg_decision
+        # self.history_action[index_action//self.nRB, index_action%self.nRB] = 1
+        action = action.reshape(self.BS_num, self.nUE, self.nRB)
+        signal_power_set = np.zeros((self.sce.nRBs, self.sce.nUEs))
+        if get_new_CSI:
+            channal_power_set = np.zeros((self.BS_num, self.sce.nUEs, self.sce.nRBs))
+        else:
+            channal_power_set = None
+        history_channel_information = H
+        H_dB = history_channel_information.reshape((self.sce.nUEs, self.sce.nRBs), )
+
+        for b_index, b in enumerate(self.BSs):
+            for global_u_index in range(self.nUE):  # notice that UE_id starts from 1
+                for rb_index in range(self.sce.nRBs):
+                    a_b_k_u = action[b_index, global_u_index, rb_index]  # todo working right now
+                    if get_new_CSI:
+                        _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                        channal_power_set[b_index][global_u_index][rb_index] = channel_power_dBm
+                    # 注意 H_dB 是 fading - pathloss
+                    signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / (
+                            10 ** (H_dB[global_u_index, rb_index] / 10))
+
+        # channel_power
+        interference_sum = signal_power_set.sum(axis=1).reshape(-1, 1)
+        interference_sum_m = np.tile(interference_sum, self.sce.nUEs)
+        interference_m = interference_sum_m - signal_power_set + Noise
+        unscale_rate_m = np.log2(1 + signal_power_set / interference_m)
+        total_rate = self.sce.BW * np.sum(unscale_rate_m) / (10 ** 6)
+
+        return total_rate, channal_power_set
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
         self.history_action[action] = 1
