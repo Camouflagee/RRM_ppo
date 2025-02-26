@@ -91,7 +91,7 @@ bounds = [(0, 1)] * (U * K)
 a0 = np.full((U * K,), N_rb / K)
 # 使用 SLSQP 方法求解（可以试试 'trust-constr' 等其他方法）
 # result = minimize(objective, a0, method='SLSQP', bounds=bounds, constraints=constraints)
-result = minimize(objective, a0, method='L-BFGS-B', bounds=bounds, options={'maxiter': 10000})
+result = minimize(objective, a0, method='trust-constr', bounds=bounds, options={'maxiter': 10000})
 
 # ============================
 # 5. 输出结果

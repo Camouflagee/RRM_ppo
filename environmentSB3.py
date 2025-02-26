@@ -221,8 +221,8 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # channel_power
         interference_sum = signal_power_set.sum(axis=1).reshape(-1, 1)
         interference_sum_m = np.tile(interference_sum, self.sce.nUEs)
-        interference_m = interference_sum_m - signal_power_set + Noise
-        unscale_rate_m = np.log2(1 + signal_power_set / interference_m)
+        interference_m = interference_sum_m - signal_power_set + Noise + 1e-10
+        unscale_rate_m = np.log2(1 + signal_power_set / interference_m + 1e-10)
         total_rate = self.sce.BW * np.sum(unscale_rate_m) / (10 ** 6)
 
         return total_rate, channal_power_set
