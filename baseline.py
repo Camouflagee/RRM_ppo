@@ -31,7 +31,7 @@ obs, info = env.reset_onlyforbaseline()
 # 生成示例参数：功率 P_{b,k,u} 和信道增益 ||H_{b,k,u}||^2（这里直接用正数表示）
 np.random.seed(42)  # 固定随机种子，保证结果可重复
 P = env.BSs[0].Transmit_Power()
-H = 10 ** (info['CSI'].reshape(U, K).transpose() / 10)  # info['CSI']: unit dBm
+H = 10 ** (info['CSI'].reshape(U, K).transpose() / 10) / 10**12 # info['CSI']: unit dBm
 
 # P = 50 # dBm # 每个资源块、每个用户对应的发射功率
 # H = np.random.uniform(0.5, 1.5, (K, U))  # 相应的信道“增益”或 ||H||^2
@@ -59,7 +59,7 @@ def objective(a):
         for k in range(K):
             numerator = a_matrix[k, u] * P * H[k, u]
             # 对于同一固定资源块 k，对于其他用户产生的干扰
-            interference = n0 + sum(a_matrix[k, u2] * P * H[k, u2]
+            interference = n0 + sum(a_matrix[k, u2] * P / H[k, u2]
                                     for u2 in range(U) if u2 != u)
             SINR = numerator / interference
             rate = np.log(1 + SINR)
