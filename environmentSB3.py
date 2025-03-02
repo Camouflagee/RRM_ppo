@@ -204,9 +204,9 @@ class SequenceDecisionEnvironmentSB3(Environment):
             channal_power_set = np.zeros((self.BS_num, self.sce.nUEs, self.sce.nRBs))
         else:
             channal_power_set = None
-        history_channel_information = H
-        H_dB = history_channel_information.reshape((self.sce.nUEs, self.sce.nRBs), )
-
+        #history_channel_information = H
+        H_dB = H.reshape((self.sce.nUEs, self.sce.nRBs), )
+        H = 10 ** (H_dB / 10)
         for b_index, b in enumerate(self.BSs):
             for global_u_index in range(self.nUE):  # notice that UE_id starts from 1
                 for rb_index in range(self.sce.nRBs):
@@ -215,17 +215,15 @@ class SequenceDecisionEnvironmentSB3(Environment):
                         _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
                         channal_power_set[b_index][global_u_index][rb_index] = channel_power_dBm
                     # 注意 H_dB 是 fading - pathloss
-                    signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / (
-                            10 ** (H_dB[global_u_index, rb_index] / 10))
-
+                    signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / H[global_u_index, rb_index]
         # channel_power
         interference_sum = signal_power_set.sum(axis=1).reshape(-1, 1)
         interference_sum_m = np.tile(interference_sum, self.sce.nUEs)
         interference_m = interference_sum_m - signal_power_set + Noise + 1e-10
-        unscale_rate_m = np.log2(1 + signal_power_set / interference_m + 1e-10)
+        unscale_rate_m = np.log2(1 + signal_power_set / interference_m)
         total_rate = self.sce.BW * np.sum(unscale_rate_m) / (10 ** 6)
-
         return total_rate, channal_power_set
+
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
         self.history_action[action] = 1
@@ -272,9 +270,9 @@ class SequenceDecisionEnvironmentSB3(Environment):
         for b_index, b in enumerate(self.BSs):
             for global_u_index in range(self.nUE):
                 for rb_index in range(self.nRB):
-                    signal_power, channel_power \
+                    signal_power, channel_power_dB \
                         = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
-                    channal_power_set[global_u_index][rb_index] = channel_power
+                    channal_power_set[global_u_index][rb_index] = channel_power_dB
 
         H = channal_power_set.reshape(-1, )
         self.history_channel_information = H

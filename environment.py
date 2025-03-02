@@ -583,11 +583,44 @@ class Environment(gym.Env):
         # # 计算信道功率
         # channel_power = np.sum(np.abs(h)**2)
         # print("Channel Power with Rayleigh Fading:", channel_power)
+        # p_LOS = self.prob_LOS(d)
+        # if np.random.rand() < p_LOS:
+        #     loss_dB = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # else:
+        #     loss_dB = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+        #
+        # Tx_Power_dBm = bs.Transmit_Power_dBm()
+        # # if bs.BStype == "MBS" or bs.BStype == "PBS":
+        # #     loss = 34 + 40 * np.log10(d) + self.calc_rayleigh_fading_dB()
+        # # elif bs.BStype == "FBS":
+        # #     loss = 37 + 30 * np.log10(d) + self.calc_rayleigh_fading_dB()
+        #
+        # if d <= bs.BS_Radius:
+        #     Rx_power_dBm = Tx_Power_dBm - loss_dB  # Received power in dBm
+        #     Rx_power = 10 ** (Rx_power_dBm / 10)  # Received power in mW
+        # else:
+        #     Rx_power = 0.0
+        # H_power = 10 ** (loss_dB / 10)
+        # return Rx_power, H_power
+        # channel model defined here
         p_LOS = self.prob_LOS(d)
-        if np.random.rand() < p_LOS:
-            loss_dB = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
-        else:
-            loss_dB = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+        # if np.random.rand() < p_LOS:
+        #     loss_dB_LOS = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # else:
+        #     loss_dB_NLOS = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+        # loss_dB = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # loss_dB = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+
+        assert 0 < p_LOS <= 1
+        # loss_dB_LOS = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # loss_dB_NLOS = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+
+        loss_dB_LOS = 128.1 + 37.6 * np.log10(d / 1000) + self.get_shadow_fading_dB(isLOS=True)
+        loss_dB_NLOS = 128.1 + 37.6 * np.log10(d / 1000) + self.get_shadow_fading_dB(isLOS=False)
+        loss_dB = p_LOS * loss_dB_LOS + (1 - p_LOS) * loss_dB_NLOS
+
+        # loss_dB = 128.1 + 37.6 * np.log10(d / 1000) + 9
+
         Tx_Power_dBm = bs.Transmit_Power_dBm()
         # if bs.BStype == "MBS" or bs.BStype == "PBS":
         #     loss = 34 + 40 * np.log10(d) + self.calc_rayleigh_fading_dB()
@@ -599,9 +632,8 @@ class Environment(gym.Env):
             Rx_power = 10 ** (Rx_power_dBm / 10)  # Received power in mW
         else:
             Rx_power = 0.0
-        H_power = 10 ** (loss_dB / 10)
-        return Rx_power, H_power
-
+        H_power_dB = loss_dB
+        return Rx_power, H_power_dB
     def cal_Receive_Power(self, bs, d):  # Calculate the received power by transmit power and path loss of a certain BS
         # trivial path loss modules
         # p_LOS = self.prob_LOS(d)

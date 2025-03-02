@@ -28,14 +28,14 @@ obs, info = env.reset_onlyforbaseline()
 
 # 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
 # 生成示例参数：功率 P_{b,k,u} 和信道增益 ||H_{b,k,u}||^2（这里直接用正数表示）
-np.random.seed(42)  # 固定随机种子，保证结果可重复
+np.random.seed(7)  # 固定随机种子，保证结果可重复
 P_constant = env.BSs[0].Transmit_Power()
 P = np.ones((K, U)) * P_constant
 H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
 H = (1 / H_uk).reshape(U, K).transpose()
 
 
-def sca_log_rate_maximization(H, P, n0, max_iter=20, tol=1e-3):
+def sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=20, tol=1e-3, verbose=False):
     """
     使用 SCA 方法求解:
 
@@ -138,7 +138,7 @@ def sca_log_rate_maximization(H, P, n0, max_iter=20, tol=1e-3):
         problem = cp.Problem(cp.Maximize(obj_expr), constraints)
 
         # 求解
-        problem.solve(solver=cp.ECOS, verbose=False)  # 或者选择其他 solver
+        problem.solve(solver=solver, verbose=verbose)  # 或者选择其他 solver
 
         if problem.status not in ["optimal", "optimal_inaccurate"]:
             print("Warning: solver did not converge to an optimal solution.")
@@ -167,9 +167,8 @@ def sca_log_rate_maximization(H, P, n0, max_iter=20, tol=1e-3):
                 denominator += n0
                 gamma_ku = numerator / denominator if denominator > 0 else 0.0
                 obj_value += np.log(1.0 + gamma_ku + 1e-15)  # +1e-15 防止log(0)
-        print(f'itration:{t} obj_value: {obj_value:.2f}')
         env_rew = env.cal_sumrate_givenH(a_current.reshape(K,U).transpose().reshape(-1), info['CSI'])[0]
-        print(f'itration:{t} env_value: {env_rew:.2f}')
+        print(f'itration:{t} obj_value: {obj_value*BW/10**6:.2f}, env_value: {env_rew:.2f}')
         obj_vals.append(obj_value)
 
         # 判断是否满足收敛
@@ -184,7 +183,7 @@ def sca_log_rate_maximization(H, P, n0, max_iter=20, tol=1e-3):
     return a_current, obj_vals
 
 
-a_opt, obj_vals = sca_log_rate_maximization(H, P, n0, max_iter=500, tol=1e-5)
+a_opt, obj_vals = sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=500, tol=1e-5)
 print("Optimized allocation a:\n", np.round(a_opt, 2))
 print("Objective value history:\n", obj_vals)
 print('env: ', env.cal_sumrate_givenH(a_opt.reshape(K,U).transpose(), info['CSI'])[0])

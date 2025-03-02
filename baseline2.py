@@ -71,13 +71,13 @@ def objective(a):
 # 3. 定义约束与变量边界
 # ============================
 # 定义约束：每个用户在所有资源块上的分配和不超过 N_rb
-constraints = []
-for u1 in range(U):
-    # 对于每个用户 u，约束：sum_{k} a[u, k] <= N_rb，即 N_rb - sum(a[u, k]) >= 0
-    constraints.append({
-        'type': 'ineq',
-        'fun': lambda a, u=u1: N_rb - np.sum(a.reshape((U, K))[u, :])
-    })
+# constraints = []
+# for u1 in range(U):
+#     # 对于每个用户 u，约束：sum_{k} a[u, k] <= N_rb，即 N_rb - sum(a[u, k]) >= 0
+#     constraints.append({
+#         'type': 'ineq',
+#         'fun': lambda a, u=u1: N_rb - np.sum(a.reshape((U, K))[u, :])
+#     })
 
 # 定义变量的边界：0 <= a[u, k] <= 1
 bounds = [(0, 1)] * (U * K)
@@ -91,7 +91,7 @@ bounds = [(0, 1)] * (U * K)
 a0 = np.full((U * K,), N_rb / K)
 # 使用 SLSQP 方法求解（可以试试 'trust-constr' 等其他方法）
 # result = minimize(objective, a0, method='SLSQP', bounds=bounds, constraints=constraints)
-result = minimize(objective, a0, method='trust-constr', bounds=bounds, options={'maxiter': 10000})
+result = minimize(objective, a0, method='L-BFGS-B', bounds=bounds,)
 
 # ============================
 # 5. 输出结果

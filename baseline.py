@@ -35,10 +35,10 @@ H = 10 ** (info['CSI'].reshape(U, K).transpose() / 10) / 10**12 # info['CSI']: u
 
 # P = 50 # dBm # 每个资源块、每个用户对应的发射功率
 # H = np.random.uniform(0.5, 1.5, (K, U))  # 相应的信道“增益”或 ||H||^2
-import warnings
+# import warnings
 
-# 将警告提升为异常
-warnings.simplefilter("error")
+# # 将警告提升为异常
+# warnings.simplefilter("error")
 
 
 # ============================
@@ -61,12 +61,12 @@ def objective(a):
             # 对于同一固定资源块 k，对于其他用户产生的干扰
             interference = n0 + sum(a_matrix[k, u2] * P / H[k, u2]
                                     for u2 in range(U) if u2 != u)
-            SINR = numerator / interference
+            SINR = numerator / (interference+1e-10)
             rate = np.log(1 + SINR)
             total += rate
 
     # 注意：使用 minimize, 故返回负值
-    return -total
+    return -total * BW  / (10 ** 6)
 
 
 # ============================
