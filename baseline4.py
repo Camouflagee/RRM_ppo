@@ -63,7 +63,7 @@ def sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=20, tol=1e-3, 
     # 这里给个简单初始化:
     # 可采用均匀分配, 或随机初始化, 或贪婪初始化等
     a_current = np.random.rand(K, U)  # 随机(0,1)
-    a_current = np.clip(a_current, 0, 1)
+    a_current = np.clip(a_current, 0, 0.5)
     # 均匀分配
     # a_current = np.full((K, U), N_rb / K)
     obj_vals = []
@@ -187,4 +187,5 @@ a_opt, obj_vals = sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=
 print("Optimized allocation a:\n", np.round(a_opt, 2))
 print("Objective value history:\n", obj_vals)
 print('env: ', env.cal_sumrate_givenH(a_opt.reshape(K,U).transpose(), info['CSI'])[0])
+print("Optimized allocation a:\n", a_opt)
 print('done')
