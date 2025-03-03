@@ -36,7 +36,7 @@ H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
 H = (1 / H_uk).reshape(U, K).transpose()
 
 
-def sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=20, tol=1e-3, verbose=False):
+def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False):
     """
     使用 SCA 方法求解:
 
@@ -60,13 +60,8 @@ def sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=20, tol=1e-3, 
     """
 
     K, U = H.shape
-    # ---------- 初始化 a^{(0)} ----------
-    # 这里给个简单初始化:
-    # 可采用均匀分配, 或随机初始化, 或贪婪初始化等
-    a_current = np.random.rand(K, U)  # 随机(0,1)
-    a_current = np.clip(a_current, 0, 0.5)
-    # 均匀分配
-    # a_current = np.full((K, U), N_rb / K)
+    a_current = init_a
+
     obj_vals = []
     for t in range(max_iter):
         # -----------------------------
@@ -183,10 +178,17 @@ def sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=20, tol=1e-3, 
         #     break
     return a_current, obj_vals
 
-
-a_opt, obj_vals = sca_log_rate_maximization(H, P, n0, solver=cp.MOSEK, max_iter=500, tol=1e-5)
+# ---------- 初始化 a^{(0)} ----------
+# 这里给个简单初始化:
+# 可采用均匀分配, 或随机初始化, 或贪婪初始化等
+a_init = np.random.rand(K, U)  # 随机(0,1)
+a_init = np.clip(a_init, 0, 0.3)
+print('a_init: ', a_init)
+# 均匀分配
+# a_current = np.full((K, U), N_rb / K)
+a_opt, obj_vals = sca_log_rate_maximization(a_init, H, P, n0, solver=cp.MOSEK, max_iter=500, tol=1e-5)
 print("Optimized allocation a:\n", np.round(a_opt, 2))
 print("Objective value history:\n", obj_vals)
 print('env: ', env.cal_sumrate_givenH(a_opt.reshape(K,U).transpose(), info['CSI'])[0])
-print("Optimized allocation a:\n", a_opt)
+print("Optimized allocation a:", np.array2string(a_opt, separator=', '))
 print('done')
