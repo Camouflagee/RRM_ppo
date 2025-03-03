@@ -28,7 +28,8 @@ obs, info = env.reset_onlyforbaseline()
 
 # 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
 # 生成示例参数：功率 P_{b,k,u} 和信道增益 ||H_{b,k,u}||^2（这里直接用正数表示）
-np.random.seed(7)  # 固定随机种子，保证结果可重复
+seed = np.random.randint(low=0, high=99)
+np.random.seed(seed)  # 固定随机种子，保证结果可重复
 P_constant = env.BSs[0].Transmit_Power()
 P = np.ones((K, U)) * P_constant
 H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
