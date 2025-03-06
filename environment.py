@@ -6,7 +6,7 @@
 @Author  ：Jiansheng LI
 @Date    ：2023/11/27 14:12 
 '''
-
+import time
 ###
 # 1. fading
 # 2. state how to define a MDP
@@ -23,7 +23,6 @@ from numpy import pi, sqrt, log10
 import torch
 
 import gymnasium as gym
-
 
 # import sys
 # sys.modules["gym"] = gym
@@ -113,12 +112,14 @@ class UE:  # Define the agent (UE)
         self.id = index
         self.location = [x, y]
         self.original_location = [x, y]
+
     def __getstate__(self):
         return self.__dict__
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.original_location = state['location']
+
     # def Set_Location(self, BS_location, BS_type : str):  # Initialize the location of the agent
     #     #
     #     #     LocM = BS_location
@@ -153,17 +154,33 @@ class Environment(gym.Env):
         self.sce = sce
         self.BS_num = self.sce.nMBS + self.sce.nPBS + self.sce.nFBS
         self.nBS = self.BS_num
-        self.nRB = self.sce.nRB
-        self.nUE = self.sce.nUE
+        self.nRB = self.sce.nRBs
+        self.nUE = self.sce.nUEs
         self.BSs = self.BS_Init()
         self.UEs = self.UE_Init()
         self.user_candidate_assignment()
+        self.distance_matrix = self.get_distance_matrix()
 
         if sce.prt:
             self.showmap()
 
+
+    def get_distance_matrix(self):
+        distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
+        for b_index, b in enumerate(self.BSs):
+            for ue_index, ue in enumerate(self.UEs):
+                Loc_diff = b.Get_Location() - ue.Get_Location()
+                distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
+        print('distance matrix is calculated!')
+        return distance_matrix
+
+    def get_n0(self):
+        # return the environmental noise # note: not dB
+        return 10 ** (self.sce.N0 / 10) * self.sce.BW
+
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.distance_matrix = self.get_distance_matrix()
 
     def showmap(self, path: str = None):
         """
@@ -180,7 +197,7 @@ class Environment(gym.Env):
             print(f'BS id: {b.id}, UE_Set: {b.UE_set}\n')
         base_positions = []
         user_positions = []
-        user_original_postions=[]
+        user_original_postions = []
         for b in self.BSs:
             base_positions.append(b.BS_Loc)
         for u in self.UEs:
@@ -240,7 +257,7 @@ class Environment(gym.Env):
         #
 
         user_positions = np.array(user_positions)
-        user_original_postions=np.array(user_original_postions)
+        user_original_postions = np.array(user_original_postions)
         # 画出基站和用户的位置
         plt.scatter(user_positions[:, 0], user_positions[:, 1], label='user', color='blue')
         # plt.scatter(x, y, label='user')
@@ -327,7 +344,6 @@ class Environment(gym.Env):
             r = 5 * random.uniform(0.5, 1)
             theta = uniform(-pi, pi)
             ue.location = [ue.original_location[0] + r * np.cos(theta), ue.original_location[1] + r * np.sin(theta)]
-
 
     def BS_Init(self) -> list:  # Initialize all the base stations
         BaseStations = []  # The vector of base stations
@@ -434,11 +450,6 @@ class Environment(gym.Env):
         else:
             return r1
 
-    def get_shadow_fading_dB(self, isLOS):
-        std_dev = 4 if isLOS else 6
-        x = self.calc_rayleigh_fading_dB(scale=std_dev)
-        return x
-
     # d = np.linspace(10, 5000, 100)
     # pathloss_LOS = [path_loss_UMa(dist) for dist in d]
     # pathloss_NLOS = [path_loss_UMa(dist, False) for dist in d]
@@ -454,6 +465,67 @@ class Environment(gym.Env):
             return 18 / d + np.exp(-d / 63) * (1 - 18 / d)
         else:
             return 0
+
+    def generate_correlation_matrix(self, d_c):
+        """
+        计算协方差矩阵 R，仅计算对称矩阵的一半以提高效率。
+        :param distance_matrix: 用户之间的距离矩阵
+        :param d_c: 相关性衰减参数
+        :return: 协方差矩阵 R
+        """
+        st = time.time()
+        num_users = self.nUE
+        R = np.zeros((num_users, num_users))
+        for i in range(num_users):
+            for j in range(i, num_users):  # 仅计算上三角部分（包含对角线）
+                if i == j:
+                    R[i, j] = 1  # 对角线元素（与自身的相关性）为 1
+                else:
+                    Loc_diff = self.UEs[i].Get_Location() - self.UEs[j].Get_Location()
+                    distance_ij = np.sqrt(Loc_diff[0] ** 2 + Loc_diff[1] ** 2)
+                    R[i, j] = np.exp(-distance_ij[i, j] / d_c)
+                    R[j, i] = R[i, j]  # 对称赋值
+
+        et = time.time()
+        print(f'distance_UE cal time: {et - st:.2f}')
+
+        R_sqrt = np.linalg.cholesky(R)
+
+        return R, R_sqrt
+
+    def test_cal_Receive_Power(self, bs, d):
+        # channel model defined here
+        p_LOS = self.prob_LOS(d)
+        # if np.random.rand() < p_LOS:
+        #     loss_dB_LOS = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # else:
+        #     loss_dB_NLOS = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+        # loss_dB = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # loss_dB = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+
+        assert 0 < p_LOS <= 1
+        # loss_dB_LOS = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
+        # loss_dB_NLOS = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
+
+        loss_dB_LOS = 128.1 + 37.6 * np.log10(d / 1000) + self.get_shadow_fading_dB(isLOS=True)
+        loss_dB_NLOS = 128.1 + 37.6 * np.log10(d / 1000) + self.get_shadow_fading_dB(isLOS=False)
+        loss_dB = p_LOS * loss_dB_LOS + (1 - p_LOS) * loss_dB_NLOS
+
+        # loss_dB = 128.1 + 37.6 * np.log10(d / 1000) + 9
+
+        Tx_Power_dBm = bs.Transmit_Power_dBm()
+        # if bs.BStype == "MBS" or bs.BStype == "PBS":
+        #     loss = 34 + 40 * np.log10(d) + self.calc_rayleigh_fading_dB()
+        # elif bs.BStype == "FBS":
+        #     loss = 37 + 30 * np.log10(d) + self.calc_rayleigh_fading_dB()
+
+        if d <= bs.BS_Radius:
+            Rx_power_dBm = Tx_Power_dBm - loss_dB  # Received power in dBm
+            Rx_power = 10 ** (Rx_power_dBm / 10)  # Received power in mW
+        else:
+            Rx_power = 0.0
+        H_power_dB = loss_dB
+        return Rx_power, H_power_dB
 
     # Path loss models
     # def path_loss_LOS(d):
@@ -526,40 +598,7 @@ class Environment(gym.Env):
     #         Rx_power = 0.0
     #     H_power_dB = loss_dB
     #     return Rx_power, H_power_dB
-    def test_cal_Receive_Power(self, bs, d):
-        # channel model defined here
-        p_LOS = self.prob_LOS(d)
-        # if np.random.rand() < p_LOS:
-        #     loss_dB_LOS = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
-        # else:
-        #     loss_dB_NLOS = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
-        # loss_dB = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
-        # loss_dB = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
-
-        assert 0 < p_LOS <= 1
-        # loss_dB_LOS = self.path_loss_UMa(d, isLOS=True) + self.get_shadow_fading_dB(isLOS=True)
-        # loss_dB_NLOS = self.path_loss_UMa(d, isLOS=False) + self.get_shadow_fading_dB(isLOS=False)
-
-        loss_dB_LOS = 128.1 + 37.6 * np.log10(d / 1000) + self.get_shadow_fading_dB(isLOS=True)
-        loss_dB_NLOS = 128.1 + 37.6 * np.log10(d / 1000) + self.get_shadow_fading_dB(isLOS=False)
-        loss_dB = p_LOS * loss_dB_LOS + (1 - p_LOS) * loss_dB_NLOS
-
-        # loss_dB = 128.1 + 37.6 * np.log10(d / 1000) + 9
-
-        Tx_Power_dBm = bs.Transmit_Power_dBm()
-        # if bs.BStype == "MBS" or bs.BStype == "PBS":
-        #     loss = 34 + 40 * np.log10(d) + self.calc_rayleigh_fading_dB()
-        # elif bs.BStype == "FBS":
-        #     loss = 37 + 30 * np.log10(d) + self.calc_rayleigh_fading_dB()
-
-        if d <= bs.BS_Radius:
-            Rx_power_dBm = Tx_Power_dBm - loss_dB  # Received power in dBm
-            Rx_power = 10 ** (Rx_power_dBm / 10)  # Received power in mW
-        else:
-            Rx_power = 0.0
-        H_power_dB = loss_dB
-        return Rx_power, H_power_dB
-
+    # 构造协方差矩阵
     def test_cal_Receive_Power_new(self, bs, d):
         # fading修正为 对信道功率有提升也有下降的情况
         # d matrix
@@ -634,70 +673,90 @@ class Environment(gym.Env):
             Rx_power = 0.0
         H_power_dB = loss_dB
         return Rx_power, H_power_dB
-    def cal_Receive_Power(self, bs, d):  # Calculate the received power by transmit power and path loss of a certain BS
-        # trivial path loss modules
-        # p_LOS = self.prob_LOS(d)
-        #
-        # if np.random.rand() < p_LOS:
-        #     loss = self.path_loss_LOS(d,isLOS=True)+self.get_shadow_fading_dB(isLOS=True)
-        # else:
-        #     loss = self.path_loss_UMa(d,isLOS=False)+self.get_shadow_fading_dB(isLOS=False)
 
-        Tx_Power_dBm = bs.Transmit_Power_dBm()
+    # def cal_Receive_Power(self, bs, d):  # Calculate the received power by transmit power and path loss of a certain BS
+    #     # trivial path loss modules
+    #     # p_LOS = self.prob_LOS(d)
+    #     #
+    #     # if np.random.rand() < p_LOS:
+    #     #     loss = self.path_loss_LOS(d,isLOS=True)+self.get_shadow_fading_dB(isLOS=True)
+    #     # else:
+    #     #     loss = self.path_loss_UMa(d,isLOS=False)+self.get_shadow_fading_dB(isLOS=False)
+    #
+    #     Tx_Power_dBm = bs.Transmit_Power_dBm()
+    #
+    #     if bs.BStype == "MBS" or bs.BStype == "PBS":
+    #         loss = 34 + 40 * np.log10(d) + self.calc_rayleigh_fading_dB()
+    #     elif bs.BStype == "FBS":
+    #         loss = 37 + 30 * np.log10(d) + self.calc_rayleigh_fading_dB()
+    #
+    #     if d <= bs.BS_Radius:
+    #         Rx_power_dBm = Tx_Power_dBm - loss  # Received power in dBm
+    #         Rx_power = 10 ** (Rx_power_dBm / 10)  # Received power in mW
+    #     else:
+    #         Rx_power = 0.0
+    #     H_power = loss
+    #     return Rx_power, H_power
+    def get_shadow_fading_dB(self, isLOS, d_c=None):
+        """
+        :param isLOS: True or False depending on whether the shadow fading is line of sight or not
+        :param d_c: correlation factor for shadow fading between users based on the distance.
+        :return:
+        """
+        std_dev = 4 if isLOS else 6
+        z_fading_raw = sqrt(1 / 2) * (
+                np.random.normal(loc=0.0, scale=std_dev) + 1j * np.random.normal(loc=0.0, scale=std_dev))
+        if d_c is not None:
+            # use correlated fading
+            dc = 10 if self.sce.dc is None else self.sce.dc
+            self.R, self.R_sqrt = self.generate_correlation_matrix(d_c=dc) # cal the covariance matrix
+            z_fading_raw = self.R_sqrt @ z_fading_raw # get the correlated fading
+            z_fading_raw = abs(z_fading_raw)  # 复数绝对值即范数
 
-        if bs.BStype == "MBS" or bs.BStype == "PBS":
-            loss = 34 + 40 * np.log10(d) + self.calc_rayleigh_fading_dB()
-        elif bs.BStype == "FBS":
-            loss = 37 + 30 * np.log10(d) + self.calc_rayleigh_fading_dB()
-
-        if d <= bs.BS_Radius:
-            Rx_power_dBm = Tx_Power_dBm - loss  # Received power in dBm
-            Rx_power = 10 ** (Rx_power_dBm / 10)  # Received power in mW
-        else:
-            Rx_power = 0.0
-        H_power = loss
-        return Rx_power, H_power
+        z_fading = abs(z_fading_raw)
+        z_fading_dB = 10 * log10(z_fading ** 2)
+        return z_fading_dB
 
     def calc_rayleigh_fading_dB(self, scale=0.5):
 
         temp_h = sqrt(1 / 2) * (np.random.normal(loc=0.0, scale=scale) + 1j * np.random.normal(loc=0.0, scale=scale))
 
-        h = abs(temp_h)
+        h = abs(temp_h)  # 复数绝对值即范数
         h_dB = 10 * log10(h ** 2)
         return h_dB
 
-    def cal_SINR(self, action, action_i, state, scenario):  # Get reward for the state-action pair
-        BS = scenario.Get_BaseStations()
-        L = scenario.BS_Number()  # The total number of BSs
-        K = self.sce.nChannel  # The total number of channels
-
-        BS_selected = action_i // K
-        Ch_selected = action_i % K  # Translate to the selected BS and channel based on the selected action index
-        Loc_diff = BS[BS_selected].Get_Location() - self.location
-        distance = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))  # Calculate the distance between BS and UE
-        Rx_power = BS[BS_selected].Receive_Power(distance)  # Calculate the received power
-
-        if Rx_power == 0.0:
-            reward = self.sce.negative_cost  # Out of range of the selected BS, thus obtain a negative reward
-            QoS = 0  # Definitely, QoS cannot be satisfied
-        else:  # If inside the coverage, then we will calculate the reward value
-            Interference = 0.0
-            for i in range(self.opt.nagents):  # Obtain interference on the same channel
-                BS_select_i = action[i] // K
-                Ch_select_i = action[i] % K  # The choice of other users
-                if Ch_select_i == Ch_selected:  # Calculate the interference on the same channel
-                    Loc_diff_i = BS[BS_select_i].Get_Location() - self.location
-                    distance_i = np.sqrt((Loc_diff_i[0] ** 2 + Loc_diff_i[1] ** 2))
-                    Rx_power_i = BS[BS_select_i].Receive_Power(distance_i)
-                    Interference += Rx_power_i  # Sum all the interference
-            Interference -= Rx_power  # Remove the received power from interference
-            Noise = 10 ** ((self.sce.N0) / 10) * self.sce.BW  # Calculate the noise
-            SINR = Rx_power / (Interference + Noise)  # Calculate the SINR
-            Rate = self.sce.BW * np.log2(1 + SINR) / (10 ** 6)  # Calculate the rate of UE
-            reward = Rate
-
-        reward = torch.tensor([reward])
-        return QoS, reward
+    # def cal_SINR(self, action, action_i, state, scenario):  # Get reward for the state-action pair
+    #     BS = scenario.Get_BaseStations()
+    #     L = scenario.BS_Number()  # The total number of BSs
+    #     K = self.sce.nChannel  # The total number of channels
+    #
+    #     BS_selected = action_i // K
+    #     Ch_selected = action_i % K  # Translate to the selected BS and channel based on the selected action index
+    #     Loc_diff = BS[BS_selected].Get_Location() - self.location
+    #     distance = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))  # Calculate the distance between BS and UE
+    #     Rx_power = BS[BS_selected].Receive_Power(distance)  # Calculate the received power
+    #
+    #     if Rx_power == 0.0:
+    #         reward = self.sce.negative_cost  # Out of range of the selected BS, thus obtain a negative reward
+    #         QoS = 0  # Definitely, QoS cannot be satisfied
+    #     else:  # If inside the coverage, then we will calculate the reward value
+    #         Interference = 0.0
+    #         for i in range(self.opt.nagents):  # Obtain interference on the same channel
+    #             BS_select_i = action[i] // K
+    #             Ch_select_i = action[i] % K  # The choice of other users
+    #             if Ch_select_i == Ch_selected:  # Calculate the interference on the same channel
+    #                 Loc_diff_i = BS[BS_select_i].Get_Location() - self.location
+    #                 distance_i = np.sqrt((Loc_diff_i[0] ** 2 + Loc_diff_i[1] ** 2))
+    #                 Rx_power_i = BS[BS_select_i].Receive_Power(distance_i)
+    #                 Interference += Rx_power_i  # Sum all the interference
+    #         Interference -= Rx_power  # Remove the received power from interference
+    #         Noise = 10 ** ((self.sce.N0) / 10) * self.sce.BW  # Calculate the noise
+    #         SINR = Rx_power / (Interference + Noise)  # Calculate the SINR
+    #         Rate = self.sce.BW * np.log2(1 + SINR) / (10 ** 6)  # Calculate the rate of UE
+    #         reward = Rate
+    #
+    #     reward = torch.tensor([reward])
+    #     return QoS, reward
 
 # if __name__ == '__main__':
 

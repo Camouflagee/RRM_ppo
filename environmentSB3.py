@@ -126,11 +126,11 @@ class SequenceDecisionEnvironmentSB3(Environment):
         #                                             dtype=self.dtype)
     def set_obs_act_space(self):
         # set obs and action space based on env's info
-        self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
-        for b_index, b in enumerate(self.BSs):
-            for ue_index, ue in enumerate(self.UEs):
-                Loc_diff = b.Get_Location() - ue.Get_Location()
-                self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
+        # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
+        # for b_index, b in enumerate(self.BSs):
+        #     for ue_index, ue in enumerate(self.UEs):
+        #         Loc_diff = b.Get_Location() - ue.Get_Location()
+        #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
         self.nUE = self.sce.nUEs
         self.nRB = self.sce.nRBs
         # action: one UE*RB pair
@@ -146,9 +146,6 @@ class SequenceDecisionEnvironmentSB3(Environment):
         self.__dict__.update(state)
         self.set_obs_act_space()
 
-    def get_n0(self):
-        # return the environmental noise # note: not dB
-        return 10 ** (self.sce.N0 / 10) * self.sce.BW
     def cal_sumrate(self, rbg_decision, get_new_CSI=False):
         """
         compute the sum rate of the whole network given the RBG allocation action
