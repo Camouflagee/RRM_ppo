@@ -18,6 +18,6 @@
 "QoS_thr": 5
 "fc": 6
 "Nb" : 10 # max number of user associated by one BS
-"rbg_Nb": 3 # max number of RBG occupied by one user
-
+"Nrb": 3 # max number of RBG occupied by one user
+"burst_prob": 0.3
 

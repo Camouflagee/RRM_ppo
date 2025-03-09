@@ -13,7 +13,7 @@ class EnvironmentSB3(Environment):
         # action space: gym.spaces.box.Box(low=0, high=1, shape=(self.nUE*self.nRB,), dtype=self.dtype)
         # note: we relax the discrete action into continue action, each BS-UE pair is modeled by a Normal distribution.
         super().__init__(sce)
-
+        self.last_reward=0
         self.history_channel_information = None
         self.dtype = np.float32
         self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
@@ -29,7 +29,7 @@ class EnvironmentSB3(Environment):
 
         self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB,),
                                                     dtype=self.dtype)
-
+        self.isBurstSenario=False
     def __getstate__(self):
         state = copy.deepcopy(self.__dict__)
         return state
@@ -75,7 +75,50 @@ class EnvironmentSB3(Environment):
         terminated, truncated, info = False, False, {}
 
         return obs, reward, terminated, truncated, info
+    def cal_sumrate_burst(self,action):
+        """
+        Compute the sum rate of the whole network given the RBG allocation action,
+        considering user burst probability.
+        """
+        Noise = 10 ** (self.sce.N0 / 10) * self.sce.BW  # Calculate the noise
+        action = action.reshape(self.nUE, self.nRB)
 
+        # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
+        user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+        burst_mask = user_burst.astype(np.float32).reshape(-1, 1)  # Shape: (nUE, 1)
+
+        # 初始化信号功率和干扰
+        signal_power_set = np.zeros((self.sce.nRBs, self.sce.nUEs))
+        channal_power_set = np.zeros((self.BS_num, self.sce.nUEs, self.sce.nRBs))
+
+        assert self.history_channel_information is not None
+        H_dB = self.history_channel_information.reshape((self.sce.nUEs, self.sce.nRBs), )
+
+        for b_index, b in enumerate(self.BSs):
+            for global_u_index in range(self.nUE):  # notice that UE_id starts from 1
+                if user_burst[global_u_index] == 0:  # 如果用户没有数据请求，跳过
+                    continue
+                for rb_index in range(self.sce.nRBs):
+                    a_b_k_u = action[global_u_index, rb_index]  # 当前资源分配
+                    _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][
+                        global_u_index])
+                    signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / (
+                            10 ** (H_dB[global_u_index, rb_index] / 10))
+                    channal_power_set[b_index][global_u_index][rb_index] = channel_power_dBm
+
+        # 计算干扰和速率
+        interference_sum = signal_power_set.sum(axis=1).reshape(-1, 1)
+        interference_sum_m = np.tile(interference_sum, self.sce.nUEs)
+        interference_m = interference_sum_m - signal_power_set + Noise
+        unscale_rate_m = np.log2(1 + (signal_power_set * burst_mask.T) / interference_m)  # 仅考虑有数据请求的用户
+        total_rate = self.sce.BW * np.sum(unscale_rate_m) / (10 ** 6)
+
+        obs = channal_power_set.reshape(-1, )
+        reward = total_rate
+        self.history_channel_information = obs
+        terminated, truncated, info = False, False, {}
+
+        return obs, reward, terminated, truncated, info
     def step(self, actions):
         return self.cal_sumrate(actions)
 
@@ -93,7 +136,7 @@ class EnvironmentSB3(Environment):
         obs = channal_power_set.reshape(-1, )
         self.history_channel_information = obs
         observation, info = np.array(obs), {}
-
+        self.last_reward=0
         return observation, info
 
 
@@ -110,6 +153,10 @@ class SequenceDecisionEnvironmentSB3(Environment):
         self.maxcnt = 50
         self.dtype = np.float32
         self.set_obs_act_space()
+        # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
+        self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+        self.episode_cnt=0
+        # burst_mask = user_burst.astype(np.float32).reshape(-1, 1)  # Shape: (nUE, 1)
         # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
         #
         # for b_index, b in enumerate(self.BSs):
@@ -153,11 +200,11 @@ class SequenceDecisionEnvironmentSB3(Environment):
         :return: total sum-rate (i.e. log(1+SINR) ) of the communication network
         """
         Noise = self.get_n0()  # Calculate the noise
-
         action = rbg_decision
         # self.history_action[index_action//self.nRB, index_action%self.nRB] = 1
         action = action.reshape(self.BS_num, self.nUE, self.nRB)
         signal_power_set = np.zeros((self.sce.nRBs, self.sce.nUEs))
+
         if get_new_CSI:
             channal_power_set = np.zeros((self.BS_num, self.sce.nUEs, self.sce.nRBs))
         else:
@@ -168,6 +215,8 @@ class SequenceDecisionEnvironmentSB3(Environment):
 
         for b_index, b in enumerate(self.BSs):
             for global_u_index in range(self.nUE):  # notice that UE_id starts from 1
+                if self.isBurstScenario and self.user_burst[global_u_index] == 0:  # 如果用户没有数据请求，跳过
+                    continue
                 for rb_index in range(self.sce.nRBs):
                     a_b_k_u = action[b_index, global_u_index, rb_index]  # todo working right now
                     if get_new_CSI:
@@ -253,7 +302,9 @@ class SequenceDecisionEnvironmentSB3(Environment):
 
         H = channal_power_set.reshape(-1, )
         self.history_channel_information = H # dBm
-
+        self.episode_cnt +=1
+        if self.isBurstScenario and self.episode_cnt % 10 ==0:
+            self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
         empty_action = np.zeros_like(H)
         obs = np.concatenate([H, empty_action], axis=-1)
         self.history_action = empty_action

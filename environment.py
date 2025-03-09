@@ -148,7 +148,7 @@ class UE:  # Define the agent (UE)
 
 # gym.Env
 class Environment(gym.Env):
-    def __init__(self, sce):  # Initialize the scenario we simulate
+    def __init__(self, sce: dict):  # Initialize the scenario we simulate
 
         self.seed = 777
         self.sce = sce
@@ -160,7 +160,11 @@ class Environment(gym.Env):
         self.UEs = self.UE_Init()
         self.user_candidate_assignment()
         self.distance_matrix = self.get_distance_matrix()
-
+        self.burst_prob = sce.get("burst_prob", None)  # 用户数据请求的概率
+        self.isBurstScenario=True
+        if self.isBurstScenario:
+            assert self.burst_prob is not None
+            print("="*10, 'Note: this is the burst scenario',  f"self.burst_prob: {self.burst_prob}", "="*10)
         if sce.prt:
             self.showmap()
 
@@ -272,9 +276,9 @@ class Environment(gym.Env):
             ax.add_patch(circle)
         print('1')
         # todo radius = 50 ?
-        for idx, (xi, yi), in enumerate(zip(user_original_postions[:, 0], user_original_postions[:, 1])):
-            circle = Circle((xi, yi), 50, color='darkred', fill=False, linewidth=1, alpha=0.6)
-            ax.add_patch(circle)
+        # for idx, (xi, yi), in enumerate(zip(user_original_postions[:, 0], user_original_postions[:, 1])):
+        #     circle = Circle((xi, yi), 50, color='darkred', fill=False, linewidth=1, alpha=0.6)
+        #     ax.add_patch(circle)
         # 设置坐标轴比例相同，以保持圆形
         ax.set_aspect('equal', adjustable='datalim')
         plt.legend()
@@ -481,9 +485,9 @@ class Environment(gym.Env):
                 if i == j:
                     R[i, j] = 1  # 对角线元素（与自身的相关性）为 1
                 else:
-                    Loc_diff = self.UEs[i].Get_Location() - self.UEs[j].Get_Location()
+                    Loc_diff = np.array(self.UEs[i].Get_Location()) - self.UEs[j].Get_Location()
                     distance_ij = np.sqrt(Loc_diff[0] ** 2 + Loc_diff[1] ** 2)
-                    R[i, j] = np.exp(-distance_ij[i, j] / d_c)
+                    R[i, j] = np.exp(-distance_ij / d_c)
                     R[j, i] = R[i, j]  # 对称赋值
 
         et = time.time()
@@ -697,7 +701,7 @@ class Environment(gym.Env):
     #         Rx_power = 0.0
     #     H_power = loss
     #     return Rx_power, H_power
-    def get_shadow_fading_dB(self, isLOS, d_c=None):
+    def get_shadow_fading_dB(self, isLOS, bs_idx=None, ue_idx=None, d_c=None):
         """
         :param isLOS: True or False depending on whether the shadow fading is line of sight or not
         :param d_c: correlation factor for shadow fading between users based on the distance.
@@ -709,8 +713,9 @@ class Environment(gym.Env):
         if d_c is not None:
             # use correlated fading
             dc = 10 if self.sce.dc is None else self.sce.dc
-            self.R, self.R_sqrt = self.generate_correlation_matrix(d_c=dc) # cal the covariance matrix
-            z_fading_raw = self.R_sqrt @ z_fading_raw # get the correlated fading
+            if self.R_sqrt is None:
+                self.R, self.R_sqrt = self.generate_correlation_matrix(d_c=dc) # cal the covariance matrix
+            z_fading_raw = self.R_sqrt @ z_fading_raw # todo use bsidx and ue idx get the correlated fading
             z_fading_raw = abs(z_fading_raw)  # 复数绝对值即范数
 
         z_fading = abs(z_fading_raw)
