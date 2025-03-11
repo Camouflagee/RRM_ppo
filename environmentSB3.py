@@ -147,14 +147,16 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # note: Given the whole channel state information (observation_space), the agent outputs One UE-RBG pair in each step.
 
         super().__init__(args)
+        self.last_total_rate = 0
         self.history_channel_information = None # unit: dBm
         self.history_action = None
-        self.cnt = 0  # this count is designed for determining the maximum output pair of the decision sequence.
-        self.maxcnt = 50
+        self.cnt = 0  # count the # of episodes
+        self.maxcnt = None
         self.dtype = np.float32
         self.set_obs_act_space()
-        # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
-        self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+        if self.isBurstScenario:
+            # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
+            self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
         self.episode_cnt=0
         # burst_mask = user_burst.astype(np.float32).reshape(-1, 1)  # Shape: (nUE, 1)
         # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
@@ -273,7 +275,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
         self.history_action[action] = 1
-        debugg=sum(self.history_action)
+        # debugg=sum(self.history_action)
         # if self.cnt >= self.maxcnt:
         #     total_rate, channal_power_set = self.cal_sumrate(self.history_action, get_new_CSI=True)
         #     # update the CSI of environment
@@ -284,7 +286,14 @@ class SequenceDecisionEnvironmentSB3(Environment):
         total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
         # self.history_channel_information don't change
         self.cnt += 1
+        # reward model2: r = obj_t- obj_t-1
+        # reward = total_rate - self.last_total_rate
+        # self.last_total_rate = total_rate
+
+        # reward model1: r = obj_t
         reward = total_rate
+        if self.eval_mode:
+            reward = total_rate
         new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)
         terminated, truncated, info = False, False, {}
         return new_obs, reward, terminated, truncated, info
@@ -299,7 +308,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
                     signal_power, channel_power \
                         = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
                     channal_power_set[global_u_index][rb_index] = channel_power
-
+        self.last_total_rate = 0
         H = channal_power_set.reshape(-1, )
         self.history_channel_information = H # dBm
         self.episode_cnt +=1

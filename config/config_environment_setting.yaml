@@ -19,5 +19,5 @@
 "fc": 6
 "Nb" : 10 # max number of user associated by one BS
 "Nrb": 3 # max number of RBG occupied by one user
-"burst_prob": 0.3
+"burst_prob": ~
 

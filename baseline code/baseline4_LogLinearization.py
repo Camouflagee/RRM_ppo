@@ -5,11 +5,11 @@ import yaml
 from environmentSB3 import SequenceDecisionEnvironmentSB3
 from utils import load_env, DotDic
 
-with open('config/config_environment_setting.yaml', 'r') as file:
+with open('../config/config_environment_setting.yaml', 'r') as file:
     env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
 sce = env_args
 
-NonSequencedEnv = load_env('saved_env/BS1UE20/env.zip')
+NonSequencedEnv = load_env('../saved_env/BS1UE20/env.zip')
 init_env = SequenceDecisionEnvironmentSB3(env_args)
 init_env.__setstate__(NonSequencedEnv.__getstate__())
 # ============================
