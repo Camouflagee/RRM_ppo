@@ -36,7 +36,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
         unwrapped_env = SequenceDecisionEnvironmentSB3(env_args)
         save_model_env(time_log_folder, _version, '', None, unwrapped_env)
     # 保存env及其环境的图
-    collect_rollout_steps = 2048 if episode_length*5 <= 2048 else episode_length*5
+    collect_rollout_steps = 2048 if episode_length * 5 <= 2048 else episode_length * 5
     env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
     if load_model_path:
         tr_args['policy'] = SequenceActorCriticPolicy
@@ -92,7 +92,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
     eval_env.env.eval_mode = True
     eval_callback = SeqPPOEvalCallback(eval_env=Monitor(eval_env),
                                        best_model_save_path=time_eval_log_dir,
-                                       eval_freq=collect_rollout_steps//2,
+                                       eval_freq=collect_rollout_steps // 2,
                                        n_eval_episodes=8, deterministic=False,
                                        render=False, verbose=1,
                                        # callback_after_eval=stop_train_callback
@@ -119,14 +119,14 @@ if __name__ == '__main__':
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    for idx, (nUE, nRB) in enumerate(zip([12, 15], [30, 40])): #10,20,21; 5,10,12 UE,RB,episode_length
-        _episode_length = (nUE-3) * _env_args.Nrb
+    for idx, (nUE, nRB) in enumerate(zip([12, 15], [30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+        _episode_length = (nUE - 3) * _env_args.Nrb
 
         _envName = f'UE{nUE}RB{nRB}'
         _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
         _env_args.nUEs = nUE
         _env_args.nRBs = nRB
-        _total_timesteps = _episode_length * 5000 * 10 if _episode_length * 5000 * 10>= 400000 else 400000
+        _total_timesteps = _episode_length * 5000 if _episode_length * 5000 * 10 >= 400000 else 400000
         _load_env_path = None
         _load_model_path = None
 
