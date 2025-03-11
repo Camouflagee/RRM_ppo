@@ -4,9 +4,6 @@ import torch
 import torch as th
 from stable_baselines3.common.distributions import CategoricalDistribution
 from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.type_aliases import PyTorchObs
-from torch.nested import masked_select
-
 from utils import DotDic
 
 
@@ -14,9 +11,10 @@ class SequenceActorCriticPolicy(ActorCriticPolicy):
     def __init__(self, *args, const_args, **kwargs):
         super().__init__(*args, **kwargs)
         if not isinstance(const_args, DotDic):
-            self.const_args=DotDic(const_args)
+            self.const_args = DotDic(const_args)
         else:
-            self.const_args=const_args
+            self.const_args = const_args
+
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
         Consider Constraint Version!
@@ -38,14 +36,17 @@ class SequenceActorCriticPolicy(ActorCriticPolicy):
         values = self.value_net(latent_vf)
         # Here mean_actions are the flattened logits
         mean_actions = self.action_net(latent_pi)
-        masked_mean_actions= self.mask_logits(mean_actions, obs) #todo
+        masked_mean_actions = self.mask_logits(mean_actions, obs)  # todo
         if isinstance(self.action_dist, CategoricalDistribution):
             # Here mean_actions are the logits before the softmax
             distribution = self.action_dist.proba_distribution(action_logits=masked_mean_actions)
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
         actions = actions.reshape((-1, *self.action_space.shape))  # type: ignore[misc]
+        # nUE,nRB = 10, 20
+        # debugg_act=obs.reshape(-1)[nUE*nRB:].round(decimals=2).reshape([nUE,nRB])
         return actions, values, log_prob
+
     # def mask_logits(self, logits, obs):
     #     """
     #     Note: only for RRM environment # class: SequenceDecisionEnvironmentSB3
@@ -60,7 +61,6 @@ class SequenceActorCriticPolicy(ActorCriticPolicy):
     #     # mask= #todo
     #     return torch.masked_select(logits, mask) # todo
 
-
     def mask_logits(self, logits, obs):
         """
         Mask the actions not to be sampled based on UE-RB constraints.
@@ -74,7 +74,7 @@ class SequenceActorCriticPolicy(ActorCriticPolicy):
         n_RBs = self.const_args['nRBs']  # Number of RBs
         obs = obs.reshape(-1)
         # Extract the part of obs that contains the last action information
-        lst_act_idx = obs.shape[0] - n_UEs * n_RBs # obs [1,nUE*nRB]
+        lst_act_idx = obs.shape[0] - n_UEs * n_RBs  # obs [1,nUE*nRB]
         lst_act = obs[lst_act_idx:]  # Shape: (UE * RB,)
 
         # Reshape lst_act to (n_UEs, n_RBs) to represent the UE-RB allocation matrix
@@ -97,5 +97,5 @@ class SequenceActorCriticPolicy(ActorCriticPolicy):
         # Apply the mask to the logits: set masked logits to a very small value
         masked_logits = logits.clone().reshape(-1)  # Create a copy of logits
         masked_logits[mask] = -99999  # Set masked logits to a very small value
-        masked_logits=masked_logits.reshape(1,-1)
+        masked_logits = masked_logits.reshape(1, -1)
         return masked_logits

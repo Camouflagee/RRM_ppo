@@ -161,13 +161,16 @@ class Environment(gym.Env):
         self.user_candidate_assignment()
         self.distance_matrix = self.get_distance_matrix()
         self.burst_prob = sce.get("burst_prob", None)  # 用户数据请求的概率
-        self.isBurstScenario=True
-        if self.isBurstScenario:
-            assert self.burst_prob is not None
-            print("="*10, 'Note: this is the burst scenario',  f"self.burst_prob: {self.burst_prob}", "="*10)
+        self.isBurstScenario = True
+        # for eval callback. In eval_mode is true, the reward model is objective value instead of other reward model such as the difference between adjacent time slot rewards
+        self.eval_mode = False
+        if self.isBurstScenario and self.burst_prob is not None:
+            # assert self.burst_prob is not None
+            print("=" * 10, 'Note: this is the burst scenario', f"self.burst_prob: {self.burst_prob}", "=" * 10)
+        else:
+            self.isBurstScenario = False
         if sce.prt:
             self.showmap()
-
 
     def get_distance_matrix(self):
         distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
@@ -284,7 +287,7 @@ class Environment(gym.Env):
         plt.legend()
         if path is not None:
             plt.savefig(path)
-            print('Saved figure to ' + path)
+            print('Map figure saved to ' + path)
         plt.show()
 
     def user_candidate_assignment(self) -> None:
@@ -714,8 +717,8 @@ class Environment(gym.Env):
             # use correlated fading
             dc = 10 if self.sce.dc is None else self.sce.dc
             if self.R_sqrt is None:
-                self.R, self.R_sqrt = self.generate_correlation_matrix(d_c=dc) # cal the covariance matrix
-            z_fading_raw = self.R_sqrt @ z_fading_raw # todo use bsidx and ue idx get the correlated fading
+                self.R, self.R_sqrt = self.generate_correlation_matrix(d_c=dc)  # cal the covariance matrix
+            z_fading_raw = self.R_sqrt @ z_fading_raw  # todo use bsidx and ue idx get the correlated fading
             z_fading_raw = abs(z_fading_raw)  # 复数绝对值即范数
 
         z_fading = abs(z_fading_raw)

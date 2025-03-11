@@ -21,7 +21,7 @@ episode_length = 1200
 _load_env = 1
 _load_model = 0
 
-log_folder, eval_log_dir = get_log_eval_dir(
+log_folder, eval_log_dir = get_TimeLogEvalDir(
     model_name=_version,
     args=os.path.join(expName, expNo),
     info_str=f'')
