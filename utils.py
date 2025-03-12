@@ -42,18 +42,42 @@ def save_model_env(log_dir: str, model_name: str, info: str, model_instance, env
         model_instance.save(path=model_path_with_name)
         print('modules was saved as {}'.format(model_path_with_name))
     if env_instance is not None:
+        time_str=os.path.split(log_dir)[-1]
         for _ in range(2):  # get the upper dir of upper dir
             env_dir = os.path.dirname(log_dir)
             log_dir = env_dir
         env_dir = os.path.join(env_dir, 'ENV')
-        env_path_with_name = os.path.join(env_dir, 'env.zip')
+        env_path_with_name = os.path.join(env_dir, f'env_{time_str}.zip')
         os.makedirs(env_dir, exist_ok=True)
-        env_instance.showmap(os.path.join(env_dir, 'env_plot.png'))
+        env_instance.showmap(os.path.join(env_dir, f'env_plot_{time_str}.png'))
         with open(env_path_with_name, 'wb') as file:
             pickle.dump(env_instance, file, 0)
             print('Env was saved in {}'.format(env_path_with_name))
     return model_path_with_name, env_path_with_name
+import sys
 
+class Logger:
+    def __init__(self, filename):
+        self.terminal = sys.stdout  # 保存原始的标准输出流
+        self.log = open(filename, "a", encoding="utf-8")  # 以追加模式打开文件
+
+    def write(self, message):
+        self.terminal.write(message)  # 在控制台输出
+        self.log.write(message)  # 写入文件
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+# # 设置日志文件名
+# log_filename = "output_log.txt"
+#
+# # 将标准输出重定向到 Logger
+# sys.stdout = Logger(log_filename)
+#
+# # 示例打印
+# print("这是一个测试信息！")
+# print("所有的print输出都会被记录到output_log.txt中。")
 
 def get_TimeLogEvalDir(log_root: str = 'Experiment_result', model_name: str = 'FACMAC', args='args1',
                        time_str: str = None, info_str: str = ''):

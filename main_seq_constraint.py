@@ -127,8 +127,8 @@ if __name__ == '__main__':
         _env_args.nUEs = nUE
         _env_args.nRBs = nRB
         _total_timesteps = _episode_length * 5000 if _episode_length * 5000 * 10 >= 400000 else 400000
-        _load_env_path = None
-        _load_model_path = None
+        _load_env_path = 'Experiment_result/seqPPOcons/UE15RB40/ENV/env.zip'
+        _load_model_path = 'Experiment_result/seqPPOcons/UE15RB40/E1_Nrb3/date20250312time031412/model_saves/seqPPOcons_NumSteps_780288_.zip'
 
         trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                 _load_model_path)
