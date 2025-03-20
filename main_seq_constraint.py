@@ -119,16 +119,17 @@ if __name__ == '__main__':
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    for idx, (nUE, nRB) in enumerate(zip([15], [40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-        _episode_length = (nUE - 3) * _env_args.Nrb
-
+    for idx, (nUE, nRB, epl) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40],[12,21,27,40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+        if idx != 1:
+            continue
+        _episode_length = epl
         _envName = f'UE{nUE}RB{nRB}'
         _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
         _env_args.nUEs = nUE
         _env_args.nRBs = nRB
-        _total_timesteps = _episode_length * 5000 if _episode_length * 5000 * 10 >= 400000 else 400000
-        _load_env_path = 'Experiment_result/seqPPOcons/UE15RB40/ENV/env.zip'
-        _load_model_path = 'Experiment_result/seqPPOcons/UE15RB40/E1_Nrb3/date20250312time031412/model_saves/seqPPOcons_NumSteps_780288_.zip'
+        _total_timesteps = 600000
+        _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
+        _load_model_path = None
 
         trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                 _load_model_path)
@@ -137,3 +138,28 @@ if __name__ == '__main__':
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.
+
+
+# 场景: UE5RB10
+# 最终目标值： 23.0
+# 投影到离散0-1可行域后最终目标值： 16.0
+# sum:  7.0
+# ==================== done: ====================
+# Converged at iter 114
+# 场景: UE10RB20
+# 最终目标值： 49.0
+# 投影到离散0-1可行域后最终目标值： 42.0
+# sum:  17.0
+# ==================== done: ====================
+# Converged at iter 121
+# 场景: UE12RB30
+# 最终目标值： 77.0
+# 投影到离散0-1可行域后最终目标值： 58.0
+# sum:  22.0
+# ==================== done: ====================
+# Converged at iter 93
+# 场景: UE15RB40
+# 最终目标值： 102.0
+# 投影到离散0-1可行域后最终目标值： 74.0
+# sum:  28.0
+# ==================== done: ====================

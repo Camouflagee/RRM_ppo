@@ -59,16 +59,26 @@ import sys
 class Logger:
     def __init__(self, filename):
         self.terminal = sys.stdout  # 保存原始的标准输出流
+        self.filename = filename
+        self.prepare_log_file()  # 检查并准备日志文件
         self.log = open(filename, "a", encoding="utf-8")  # 以追加模式打开文件
 
+    def prepare_log_file(self):
+        """检查日志文件是否存在，存在则添加分割线"""
+        if os.path.exists(self.filename):
+            with open(self.filename, "a", encoding="utf-8") as file:
+                file.write("\n======== 新日志分割线 ========\n")  # 添加分割线
+
     def write(self, message):
-        self.terminal.write(message)  # 在控制台输出
-        self.log.write(message)  # 写入文件
+        self.terminal.write(message)  # 控制台输出
+        self.log.write(message)  # 写入日志文件
 
     def flush(self):
         self.terminal.flush()
         self.log.flush()
-
+    def close(self):
+        """关闭日志文件"""
+        self.log.close()
 # # 设置日志文件名
 # log_filename = "output_log.txt"
 #
