@@ -13,7 +13,7 @@ class EnvironmentSB3(Environment):
         # action space: gym.spaces.box.Box(low=0, high=1, shape=(self.nUE*self.nRB,), dtype=self.dtype)
         # note: we relax the discrete action into continue action, each BS-UE pair is modeled by a Normal distribution.
         super().__init__(sce)
-        self.last_reward=0
+        self.last_reward = 0
         self.history_channel_information = None
         self.dtype = np.float32
         self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
@@ -29,7 +29,8 @@ class EnvironmentSB3(Environment):
 
         self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB,),
                                                     dtype=self.dtype)
-        self.isBurstSenario=False
+        self.isBurstSenario = False
+
     def __getstate__(self):
         state = copy.deepcopy(self.__dict__)
         return state
@@ -75,7 +76,8 @@ class EnvironmentSB3(Environment):
         terminated, truncated, info = False, False, {}
 
         return obs, reward, terminated, truncated, info
-    def cal_sumrate_burst(self,action):
+
+    def cal_sumrate_burst(self, action):
         """
         Compute the sum rate of the whole network given the RBG allocation action,
         considering user burst probability.
@@ -119,6 +121,7 @@ class EnvironmentSB3(Environment):
         terminated, truncated, info = False, False, {}
 
         return obs, reward, terminated, truncated, info
+
     def step(self, actions):
         return self.cal_sumrate(actions)
 
@@ -136,7 +139,7 @@ class EnvironmentSB3(Environment):
         obs = channal_power_set.reshape(-1, )
         self.history_channel_information = obs
         observation, info = np.array(obs), {}
-        self.last_reward=0
+        self.last_reward = 0
         return observation, info
 
 
@@ -148,7 +151,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
 
         super().__init__(args)
         self.last_total_rate = 0
-        self.history_channel_information = None # unit: dBm
+        self.history_channel_information = None  # unit: dBm
         self.history_action = None
         self.cnt = 0  # count the # of episodes
         self.maxcnt = None
@@ -157,7 +160,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         if self.isBurstScenario:
             # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
             self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-        self.episode_cnt=0
+        self.episode_cnt = 0
         # burst_mask = user_burst.astype(np.float32).reshape(-1, 1)  # Shape: (nUE, 1)
         # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
         #
@@ -173,6 +176,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # # obs: [Channel state information + action dimension (last decision pair)]
         # self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2,),
         #                                             dtype=self.dtype)
+
     def set_obs_act_space(self):
         # set obs and action space based on env's info
         # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
@@ -187,13 +191,24 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # obs: [Channel state information + action dimension (last decision pair)]
         self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2,),
                                                     dtype=self.dtype)
+
+    def setup(self):
+        self.set_obs_act_space()
+        self.set_user_burst()
+        self.eval_mode = False
+
+    def set_user_burst(self):
+        if self.isBurstScenario:
+            # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
+            self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+
     def __getstate__(self):
         state = copy.deepcopy(self.__dict__)
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self.set_obs_act_space()
+        self.setup()
 
     def cal_sumrate(self, rbg_decision, get_new_CSI=False):
         """
@@ -222,7 +237,8 @@ class SequenceDecisionEnvironmentSB3(Environment):
                 for rb_index in range(self.sce.nRBs):
                     a_b_k_u = action[b_index, global_u_index, rb_index]  # todo working right now
                     if get_new_CSI:
-                        _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                        _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][
+                            global_u_index])
                         channal_power_set[b_index][global_u_index][rb_index] = channel_power_dBm
                     # 注意 H_dB 是 fading - pathloss
                     signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / (
@@ -236,6 +252,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         total_rate = self.sce.BW * np.sum(unscale_rate_m) / (10 ** 6)
 
         return total_rate, channal_power_set
+
     def cal_sumrate_givenH(self, rbg_decision, H, get_new_CSI=False):
         """
         compute the sum rate of the whole network given the RBG allocation action
@@ -252,7 +269,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
             channal_power_set = np.zeros((self.BS_num, self.sce.nUEs, self.sce.nRBs))
         else:
             channal_power_set = None
-        #history_channel_information = H
+        # history_channel_information = H
         H_dB = H.reshape((self.sce.nUEs, self.sce.nRBs), )
         H = 10 ** (H_dB / 10)
         for b_index, b in enumerate(self.BSs):
@@ -260,10 +277,12 @@ class SequenceDecisionEnvironmentSB3(Environment):
                 for rb_index in range(self.sce.nRBs):
                     a_b_k_u = action[b_index, global_u_index, rb_index]  # todo working right now
                     if get_new_CSI:
-                        _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                        _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][
+                            global_u_index])
                         channal_power_set[b_index][global_u_index][rb_index] = channel_power_dBm
                     # 注意 H_dB 是 fading - pathloss
-                    signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / H[global_u_index, rb_index]
+                    signal_power_set[rb_index][global_u_index] += a_b_k_u * b.Transmit_Power() / H[
+                        global_u_index, rb_index]
         # channel_power
         interference_sum = signal_power_set.sum(axis=1).reshape(-1, 1)
         interference_sum_m = np.tile(interference_sum, self.sce.nUEs)
@@ -287,11 +306,11 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # self.history_channel_information don't change
         self.cnt += 1
         # reward model2: r = obj_t- obj_t-1
-        # reward = total_rate - self.last_total_rate
+        reward = total_rate - self.last_total_rate
         # self.last_total_rate = total_rate
 
         # reward model1: r = obj_t
-        reward = total_rate
+        # reward = total_rate
         if self.eval_mode:
             reward = total_rate
         new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)
@@ -310,9 +329,9 @@ class SequenceDecisionEnvironmentSB3(Environment):
                     channal_power_set[global_u_index][rb_index] = channel_power
         self.last_total_rate = 0
         H = channal_power_set.reshape(-1, )
-        self.history_channel_information = H # dBm
-        self.episode_cnt +=1
-        if self.isBurstScenario and self.episode_cnt % 10 ==0:
+        self.history_channel_information = H  # dBm
+        self.episode_cnt += 1
+        if self.isBurstScenario and self.episode_cnt % 10 == 0:
             self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
         empty_action = np.zeros_like(H)
         obs = np.concatenate([H, empty_action], axis=-1)
@@ -320,6 +339,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         observation, info = np.array(obs), {}
         self.cnt = 0
         return observation, info
+
     def reset_onlyforbaseline(self, seed=None, options=None):
         # action = self.action_space.sample().reshape(self.nUE, self.nRB)
         # todo can we optimize this code ?

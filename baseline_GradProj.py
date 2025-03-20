@@ -8,6 +8,24 @@ from utils import load_env, DotDic, Logger
 with open('config/config_environment_setting.yaml', 'r') as file:
     env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
 sce = env_args
+
+
+def discrete_project_per_user(x, N_rb):
+    """
+    将向量 x 投影到 {0,1}^K 且 sum(x)<=N_rb 的集合中
+    """
+    x = np.clip(x, 0, 1)
+    candidate = np.where(x > 0.5)[0]
+    z = np.zeros_like(x)
+    if candidate.size <= N_rb:
+        z[candidate] = 1
+    else:
+        sorted_idx = candidate[np.argsort(-x[candidate])]
+        chosen_idx = sorted_idx[:N_rb]
+        z[chosen_idx] = 1
+    return z
+
+
 #
 # NonSequencedEnv = load_env('saved_env/BS1UE20/env.zip')
 # init_env = SequenceDecisionEnvironmentSB3(env_args)
@@ -15,6 +33,7 @@ sce = env_args
 # env_path_list = [
 #     'Experiment_result/seqPPOcons/UE5RB10/ENV/env.zip'
 # ]
+sol_dict={}
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
     logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
@@ -30,7 +49,7 @@ for idx, (nUE, nRB) in enumerate(
     BW = env.sce.BW
     # 噪声功率 n0 和每用户的资源约束 N_rb
     n0 = env.get_n0()  # 噪声功率
-    N_rb = env.sce.rbg_Nb if env.sce.rbg_Nb is not None else env.sce.Nrb # 每个用户在所有资源块上分配量之和上限
+    N_rb = env.sce.rbg_Nb if env.sce.rbg_Nb is not None else env.sce.Nrb  # 每个用户在所有资源块上分配量之和上限
     obs, info = env.reset_onlyforbaseline()
 
     # 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
@@ -156,8 +175,25 @@ for idx, (nUE, nRB) in enumerate(
             break
         a = a_new
 
-    print("最终目标值：", compute_rate(a, P, H_norm_sq, n0) * BW // 10 ** 6)
-    print("最终资源分配 a_opt:")
-    a_opt = a
-    print(np.array2string(a_opt, separator=', '))
-    print('done')
+    # print("最终目标值：", compute_rate(a, P, H_norm_sq, n0) * BW // 10 ** 6)
+    # print("最终资源分配 a_opt:")
+    # a_opt = a
+    # print(np.array2string(a_opt, separator=', '))
+    print("=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
+    a_opt_discret = a
+    for u in range(U):
+        a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)
+    print("最终目标值：", env.cal_sumrate_givenH(a_opt_discret.reshape(K, U).transpose(), info['CSI'])[0])
+    print("a_opt_discret:")
+    print(np.array2string(a_opt_discret, separator=', '))
+    sol_dict.update({
+        f'UE{nUE}RB{nRB}':
+            {
+                'sol': a,
+                'H': info['CSI'],
+                'K': K,
+                'U': U,
+            }
+    }
+    )
+print('done')
