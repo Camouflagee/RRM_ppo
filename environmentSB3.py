@@ -307,7 +307,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         self.cnt += 1
         # reward model2: r = obj_t- obj_t-1
         reward = total_rate - self.last_total_rate
-        # self.last_total_rate = total_rate
+        self.last_total_rate = total_rate
 
         # reward model1: r = obj_t
         # reward = total_rate

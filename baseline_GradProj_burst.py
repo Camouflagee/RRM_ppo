@@ -17,20 +17,22 @@ sce = env_args
 # env_path_list = [
 #     'Experiment_result/seqPPOcons/UE5RB10/ENV/env.zip'
 # ]
-burst_prob=0.8
+burst_prob = 0.8
 isBurst = True
-for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+for idx, (nUE, nRB) in enumerate(
+        zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
     np.random.seed(0)
-    res=[]
-    res_proj=[]
-    num_pair=[]
+    res = []
+    res_proj = []
+    num_pair = []
     print()
     print(f"场景: UE{nUE}RB{nRB}")
     # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
     init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
 
-    test_num=10
+    test_num = 10
     for loop in range(test_num):
+
         # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
         # sys.stdout = logger
         # ============================
@@ -43,7 +45,7 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
         BW = env.sce.BW
         # 噪声功率 n0 和每用户的资源约束 N_rb
         n0 = env.get_n0()  # 噪声功率
-        N_rb = env.sce.rbg_Nb if env.sce.rbg_Nb is not None else env.sce.Nrb # 每个用户在所有资源块上分配量之和上限
+        N_rb = env.sce.rbg_Nb if env.sce.rbg_Nb is not None else env.sce.Nrb  # 每个用户在所有资源块上分配量之和上限
         obs, info = env.reset_onlyforbaseline()
 
         # 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
@@ -54,7 +56,10 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
         P = np.ones((K, U)) * P_constant
         H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
         H = (1 / H_uk).reshape(U, K).transpose()
-
+        if isBurst and burst_prob:
+            user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
+            user_burst_mat=np.repeat(user_burst[None, :], nRB, axis=0)
+            H = H*user_burst_mat
         import numpy as np
 
         # -------------------------------
@@ -78,9 +83,12 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
             if a[:, u].sum() > N_rb:
                 a[:, u] = a[:, u] * (N_rb / a[:, u].sum())
 
+
         def projection(a_u, N_rb):
             # the projection used in the algorithm
             return quadratic_projection(a_u, N_rb)
+
+
         # 定义投影函数，对每个用户独立投影到 [0,1]^K 且 sum(a[:,u]) <= N_rb
         def continue_projection(a_u, N_rb):
             # a_u: 分配给单个用户的 K 维向量
@@ -91,6 +99,8 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
                 return a_u
             # 若超出上限，则做归一化投影
             return a_u * (N_rb / s)
+
+
         def quadratic_projection(x_u, N_rb):
             """
             对向量 x_u 进行投影，使得满足以下约束：
@@ -136,6 +146,8 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
             z_u = np.clip(x_u_clipped - lambda_opt, 0, 1)
 
             return z_u
+
+
         def randomized_round_project(x, N_rb):
             """
             将向量x在[0,1]内（先clip），然后通过随机化舍入将其投影到{0,1}^K，
@@ -165,6 +177,8 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
             z = np.zeros_like(x)
             z[chosen] = 1
             return z
+
+
         def gumbel_softmax_round_project(x, N_rb, tau=0.5):
             """
             利用Gumbel-Softmax方法实现离散化近似：
@@ -190,6 +204,8 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
             z = np.zeros_like(y)
             z[indices] = 1
             return z
+
+
         def discrete_project_per_user(x, N_rb):
             """
             将向量 x 在欧几里得距离意义下投影到二值集合 {0,1}^K，
@@ -219,14 +235,15 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
                 z[chosen_idx] = 1
             return z
 
+
         # 计算目标函数值
         def compute_rate(a, P, H_norm_sq, n0):
             rate = 0
             K, U = a.shape
             for k in range(K):
                 for u in range(U):
-                    if isBurst and user_burst[U] == 0:  # 如果用户没有数据请求，跳过
-                        continue
+                    # if isBurst and user_burst[U] == 0:  # 如果用户没有数据请求，跳过
+                    #     continue
                     # 计算干扰项I_{k,u}
                     inter = 0
                     for up in range(U):
@@ -299,14 +316,13 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
                 break
             a = a_new
 
-
         a_opt = a
-        a_opt_discrete=a_opt
+        a_opt_discrete = a_opt
         for u in range(U):
             a_opt_discrete[:, u] = randomized_round_project(a_opt_discrete[:, u], N_rb)
-        opt_obj=compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
+        opt_obj = compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
         res.append(opt_obj)
-        opt_obj_discrete=compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6
+        opt_obj_discrete = compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6
         res_proj.append(opt_obj_discrete)
         num_pair.append(sum(sum(a_opt_discrete)))
         # print("最优目标值：", opt_obj)
@@ -317,8 +333,8 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
         # print("投影到离散可行域 a_opt_discrete:")
         # print(np.array2string(a_opt_discrete, separator=', '))
         # print("="*20,"done:","="*20)
-    print("="*20,f"{test_num}次实验平均后结果","="*20)
+    print("=" * 20, f"{test_num}次实验平均后结果", "=" * 20)
     print("最终目标值：", np.mean(res))
     print("投影到离散0-1可行域后最终目标值：", np.mean(res_proj))
     print("UE/RB配对数量:", np.mean(num_pair))
-    print("="*20,"done:","="*20)
+    print("=" * 20, "done:", "=" * 20)

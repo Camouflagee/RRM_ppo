@@ -34,10 +34,17 @@ def discrete_project_per_user(x, N_rb):
 #     'Experiment_result/seqPPOcons/UE5RB10/ENV/env.zip'
 # ]
 sol_dict={}
+burstprob=0.8
+isBurst=True
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-    logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
+    # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
     init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
+
+    if isBurst and burstprob:
+        init_env.isBurstScenario = isBurst
+        init_env.burst_prob = burstprob
+        init_env.set_user_burst()
     # ============================
     # 1. 参数设置
     # ============================
