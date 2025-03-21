@@ -125,8 +125,10 @@ if __name__ == '__main__':
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     isBurst = True
     burstprob = 0.8
+    idx=0
     for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-
+        if idx != 3:
+            continue
         _envName = f'UE{nUE}RB{nRB}'
         _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
         _env_args.nUEs = nUE

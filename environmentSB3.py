@@ -305,12 +305,12 @@ class SequenceDecisionEnvironmentSB3(Environment):
         total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
         # self.history_channel_information don't change
         self.cnt += 1
-        # reward model2: r = obj_t- obj_t-1
-        reward = total_rate - self.last_total_rate
-        self.last_total_rate = total_rate
+        # # reward model2: r = obj_t- obj_t-1
+        # reward = total_rate - self.last_total_rate
+        # self.last_total_rate = total_rate
 
         # reward model1: r = obj_t
-        # reward = total_rate
+        reward = total_rate
         if self.eval_mode:
             reward = total_rate
         new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)

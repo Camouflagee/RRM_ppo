@@ -3,9 +3,9 @@ from gymnasium.wrappers import TimeLimit
 from policy.sequence_ppo import SequencePPO
 from utils import load_env
 model_path_list=[
-    'Experiment_result/seqPPOcons_burst_rew2/UE5RB10/E1_Nrb3/date20250320time160404/model_saves/eval_best_model/best_model.zip',
-    'Experiment_result/seqPPOcons_burst_rew2/UE10RB20/E1_Nrb3/date20250320time164152/model_saves/eval_best_model/best_model.zip',
-    # 'Experiment_result/seqPPOcons/UE12RB30/E1_Nrb3/date20250311time164651/model_saves/eval_best_model/best_model.zip',
+    'Experiment_result/seqPPOcons_burst/UE5RB10/E1_Nrb3/date20250320time160404/model_saves/eval_best_model/best_model.zip',
+    'Experiment_result/seqPPOcons_burst/UE10RB20/E1_Nrb3/date20250320time164152/model_saves/eval_best_model/best_model.zip',
+    'Experiment_result/seqPPOcons_burst/UE12RB30/E1_Nrb3/date20250321time110358/model_saves/eval_best_model/best_model.zip',
     # 'Experiment_result/seqPPOcons/UE15RB40/E1_Nrb3/date20250312time215412/model_saves/eval_best_model/best_model.zip'
 ]
 for idx, (nUE, nRB, episode_length,model_path) in enumerate(zip([5, 10, 12, 15][:len(model_path_list)], [10, 20, 30, 40][:len(model_path_list)],[12,21,27,40][:len(model_path_list)],model_path_list)):# 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
