@@ -360,3 +360,88 @@ class SequenceDecisionEnvironmentSB3(Environment):
         observation, info = np.array(obs), {'CSI': H}
         self.cnt = 0
         return observation, info
+
+
+class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.history_channel_information_error = None
+
+    def set_obs_act_space(self):
+        # set obs and action space based on env's info
+        # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
+        # for b_index, b in enumerate(self.BSs):
+        #     for ue_index, ue in enumerate(self.UEs):
+        #         Loc_diff = b.Get_Location() - ue.Get_Location()
+        #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
+        self.nUE = self.sce.nUEs
+        self.nRB = self.sce.nRBs
+        # action: one UE*RB pair
+        self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB, start=0)  # +1 : add side information
+        # obs: [Channel state information + action dimension (last decision pair)]
+        self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2 + 1,),
+                                                    dtype=self.dtype)
+        self.history_channel_information_error = None
+
+    def get_estimated_H(self, H):
+        """
+        Returns the estimated channel information (CSI/RSRP),
+        \hat_{H} = H + error/noise,
+        The noise should be implemented as the noise depending on the last time-slot noise.
+        :return:
+        """
+        pass
+
+    def step(self, action):
+        # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
+        self.history_action[action] = 1
+        # debugg=sum(self.history_action)
+        # if self.cnt >= self.maxcnt:
+        #     total_rate, channal_power_set = self.cal_sumrate(self.history_action, get_new_CSI=True)
+        #     # update the CSI of environment
+        #     self.history_channel_information = channal_power_set.reshape(-1, )
+        #     self.history_action = np.zeros_like(self.history_channel_information)
+        #     self.cnt = 0
+        # else:
+        total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
+        total_rate_error, _ = self.cal_sumrate(self.history_action_error, get_new_CSI=False)
+
+        # self.history_channel_information don't change
+        self.cnt += 1
+        # # reward model2: r = obj_t- obj_t-1
+        reward = total_rate - self.last_total_rate
+        self.last_total_rate = total_rate
+
+        # reward model1: r = obj_t
+        # reward = total_rate
+        if self.eval_mode:
+            reward = total_rate
+        new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)
+        terminated, truncated, info = False, False, {}
+        return new_obs, reward, terminated, truncated, info
+
+    def reset(self, seed=None, options=None):
+        # action = self.action_space.sample().reshape(self.nUE, self.nRB)
+        # todo can we optimize this code ?
+        channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
+        for b_index, b in enumerate(self.BSs):
+            for global_u_index in range(self.nUE):
+                for rb_index in range(self.nRB):
+                    signal_power, channel_power \
+                        = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                    channal_power_set[global_u_index][rb_index] = channel_power
+        self.last_total_rate = 0
+        H = channal_power_set.reshape(-1, )
+        H_error = H + np.random.uniform(size=H.shape)
+        self.history_channel_information_error = H_error
+        self.history_channel_information = H  # dBm
+        self.episode_cnt += 1
+        if self.isBurstScenario and self.episode_cnt % 10 == 0:
+            self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+        empty_action = np.zeros_like(H)
+        channel_damage_info = 0
+        obs = np.concatenate([H_error, channel_damage_info, empty_action], axis=-1)
+        self.history_action = empty_action
+        observation, info = np.array(obs), {}
+        self.cnt = 0
+        return observation, info
