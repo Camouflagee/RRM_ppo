@@ -140,7 +140,7 @@ if __name__ == '__main__':
         trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                 _load_model_path, isBurst, burstprob)
         print(f'UE{nUE}RB{nRB} training is done')
-
+    system_shutdown(500)
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.
