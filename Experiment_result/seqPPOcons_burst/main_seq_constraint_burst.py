@@ -7,7 +7,7 @@ from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoMod
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 
-from environmentSB3 import EnvironmentSB3, SequenceDecisionEnvironmentSB3, SequenceDecisionAdaptiveEnvironmentSB3
+from environmentSB3 import EnvironmentSB3, SequenceDecisionEnvironmentSB3
 from stable_baselines3 import PPO
 
 from module.mycallbacks import SeqPPOEvalCallback
@@ -28,12 +28,12 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
         info_str=f'')
     if load_env_path:
         unwrapped_env = load_env(load_env_path)
-        if not isinstance(unwrapped_env, SequenceDecisionAdaptiveEnvironmentSB3):
-            init_env = SequenceDecisionAdaptiveEnvironmentSB3(env_args)
+        if not isinstance(unwrapped_env, SequenceDecisionEnvironmentSB3):
+            init_env = SequenceDecisionEnvironmentSB3(env_args)
             init_env.__setstate__(unwrapped_env.__getstate__())
             unwrapped_env = init_env
     else:
-        unwrapped_env = SequenceDecisionAdaptiveEnvironmentSB3(env_args)
+        unwrapped_env = SequenceDecisionEnvironmentSB3(env_args)
         save_model_env(time_log_folder, _version, '', None, unwrapped_env)
     if isBurst and burstprob:
         unwrapped_env.isBurstScenario = isBurst
@@ -117,28 +117,30 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A'
+    _version = 'seqPPOcons_burst_rew2'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    isBurst = False
+    isBurst = True
     burstprob = 0.8
     idx=0
     for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+        if idx != 3:
+            continue
         _envName = f'UE{nUE}RB{nRB}'
         _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
         _env_args.nUEs = nUE
         _env_args.nRBs = nRB
         _total_timesteps = 800000
-        _load_env_path = f'Experiment_result/seqPPOcons_BR2A/UE{nUE}RB{nRB}/ENV/env.zip'
+        _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
         _load_model_path = None
 
         trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                 _load_model_path, isBurst, burstprob)
         print(f'UE{nUE}RB{nRB} training is done')
-
+    system_shutdown(500)
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.

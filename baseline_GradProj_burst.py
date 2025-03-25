@@ -59,7 +59,7 @@ for idx, (nUE, nRB) in enumerate(
         if isBurst and burst_prob:
             user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
             user_burst_mat=np.repeat(user_burst[None, :], nRB, axis=0)
-
+            H = H*user_burst_mat
         import numpy as np
 
         # -------------------------------

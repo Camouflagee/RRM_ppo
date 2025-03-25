@@ -47,9 +47,9 @@ def save_model_env(log_dir: str, model_name: str, info: str, model_instance, env
             env_dir = os.path.dirname(log_dir)
             log_dir = env_dir
         env_dir = os.path.join(env_dir, 'ENV')
-        env_path_with_name = os.path.join(env_dir, f'env_{time_str}.zip')
+        env_path_with_name = os.path.join(env_dir, f'env.zip')
         os.makedirs(env_dir, exist_ok=True)
-        env_instance.showmap(os.path.join(env_dir, f'env_plot_{time_str}.png'))
+        env_instance.showmap(os.path.join(env_dir, f'env_plot.png'))
         with open(env_path_with_name, 'wb') as file:
             pickle.dump(env_instance, file, 0)
             print('Env was saved in {}'.format(env_path_with_name))
