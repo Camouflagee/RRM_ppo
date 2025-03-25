@@ -5,13 +5,13 @@ import yaml
 from environmentSB3 import SequenceDecisionEnvironmentSB3
 from utils import load_env, DotDic, Logger
 
-with open('config/config_environment_setting.yaml', 'r') as file:
-    env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-sce = env_args
-
-NonSequencedEnv = load_env('saved_env/BS1UE20/env.zip')
-init_env = SequenceDecisionEnvironmentSB3(env_args)
-init_env.__setstate__(NonSequencedEnv.__getstate__())
+# with open('config/config_environment_setting.yaml', 'r') as file:
+#     env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
+# sce = env_args
+#
+# NonSequencedEnv = load_env('saved_env/BS1UE20/env.zip')
+# init_env = SequenceDecisionEnvironmentSB3(env_args)
+# init_env.__setstate__(NonSequencedEnv.__getstate__())
 # def get_env_reward(env, a, H):
 #     K = env.sce.nRBs
 #     U = env.sce.nUEs
@@ -25,24 +25,24 @@ init_env.__setstate__(NonSequencedEnv.__getstate__())
 # 1. 参数设置
 # ============================
 
-env = init_env
-# 设定资源块数目 K, 用户数 U
-K = env.nRB  # 例如：3个资源块
-U = env.nUE  # 例如：4个用户
-BW = env.sce.BW
-# 噪声功率 n0 和每用户的资源约束 N_rb
-n0 = env.get_n0()  # 噪声功率
-N_rb = env.sce.rbg_Nb  # 每个用户在所有资源块上分配量之和上限
-obs, info = env.reset_onlyforbaseline()
-
-# 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
-# 生成示例参数：功率 P_{b,k,u} 和信道增益 ||H_{b,k,u}||^2（这里直接用正数表示）
-seed = np.random.randint(low=0, high=99)
-np.random.seed(seed)  # 固定随机种子，保证结果可重复
-P_constant = env.BSs[0].Transmit_Power()
-P = np.ones((K, U)) * P_constant
-H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
-H = (1 / H_uk).reshape(U, K).transpose()
+# env = init_env
+# # 设定资源块数目 K, 用户数 U
+# K = env.nRB  # 例如：3个资源块
+# U = env.nUE  # 例如：4个用户
+# BW = env.sce.BW
+# # 噪声功率 n0 和每用户的资源约束 N_rb
+# n0 = env.get_n0()  # 噪声功率
+# N_rb = env.sce.rbg_Nb  # 每个用户在所有资源块上分配量之和上限
+# obs, info = env.reset_onlyforbaseline()
+#
+# # 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
+# # 生成示例参数：功率 P_{b,k,u} 和信道增益 ||H_{b,k,u}||^2（这里直接用正数表示）
+# seed = np.random.randint(low=0, high=99)
+# np.random.seed(seed)  # 固定随机种子，保证结果可重复
+# P_constant = env.BSs[0].Transmit_Power()
+# P = np.ones((K, U)) * P_constant
+# H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
+# H = (1 / H_uk).reshape(U, K).transpose()
 
 
 def discrete_project_per_user(x, N_rb):
@@ -265,7 +265,7 @@ for idx, (nUE, nRB) in enumerate(
         H = (1 / H_uk).reshape(U, K).transpose()
 
         a_init = np.random.rand(K, U)  # 随机(0,1)
-        a, _ = sca_log_rate_maximization(a_init, H, P, n0, solver=cp.MOSEK, max_iter=500, tol=1e-4, verbose=False)
+        a, _ = sca_log_rate_maximization(a_init, H, P, n0, solver=cp.MOSEK, max_iter=200, tol=1e-3, verbose=False)
         a_opt_discret = a
         for u in range(U):
             a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)

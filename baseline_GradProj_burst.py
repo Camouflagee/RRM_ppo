@@ -59,7 +59,7 @@ for idx, (nUE, nRB) in enumerate(
         if isBurst and burst_prob:
             user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
             user_burst_mat=np.repeat(user_burst[None, :], nRB, axis=0)
-            H = H*user_burst_mat
+
         import numpy as np
 
         # -------------------------------
@@ -237,9 +237,11 @@ for idx, (nUE, nRB) in enumerate(
 
 
         # 计算目标函数值
-        def compute_rate(a, P, H_norm_sq, n0):
+        def compute_rate(a, P, H_norm_sq, n0, _user_burst_mat=None):
             rate = 0
             K, U = a.shape
+            if user_burst_mat:
+                H_norm_sq = H_norm_sq * user_burst_mat
             for k in range(K):
                 for u in range(U):
                     # if isBurst and user_burst[U] == 0:  # 如果用户没有数据请求，跳过
@@ -320,9 +322,9 @@ for idx, (nUE, nRB) in enumerate(
         a_opt_discrete = a_opt
         for u in range(U):
             a_opt_discrete[:, u] = randomized_round_project(a_opt_discrete[:, u], N_rb)
-        opt_obj = compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
+        opt_obj = compute_rate(a_opt, P, H_norm_sq, n0, user_burst_mat) * BW // 10 ** 6
         res.append(opt_obj)
-        opt_obj_discrete = compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6
+        opt_obj_discrete = compute_rate(a_opt_discrete, P, H_norm_sq, n0, user_burst_mat) * BW // 10 ** 6
         res_proj.append(opt_obj_discrete)
         num_pair.append(sum(sum(a_opt_discrete)))
         # print("最优目标值：", opt_obj)

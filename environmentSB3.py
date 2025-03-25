@@ -404,8 +404,8 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         #     self.cnt = 0
         # else:
         total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
-        total_rate_error, _ = self.cal_sumrate(self.history_action_error, get_new_CSI=False)
-
+        total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error, get_new_CSI=False)
+        channel_damage_info=np.array([total_rate-total_rate_error])
         # self.history_channel_information don't change
         self.cnt += 1
         # # reward model2: r = obj_t- obj_t-1
@@ -416,7 +416,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         # reward = total_rate
         if self.eval_mode:
             reward = total_rate
-        new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)
+        new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
         terminated, truncated, info = False, False, {}
         return new_obs, reward, terminated, truncated, info
 
@@ -432,15 +432,15 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                     channal_power_set[global_u_index][rb_index] = channel_power
         self.last_total_rate = 0
         H = channal_power_set.reshape(-1, )
-        H_error = H + np.random.uniform(size=H.shape)
+        H_error = H + np.random.uniform(size=H.shape)*self.get_n0()
         self.history_channel_information_error = H_error
         self.history_channel_information = H  # dBm
         self.episode_cnt += 1
         if self.isBurstScenario and self.episode_cnt % 10 == 0:
             self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+        channel_damage_info = np.array([0])
         empty_action = np.zeros_like(H)
-        channel_damage_info = 0
-        obs = np.concatenate([H_error, channel_damage_info, empty_action], axis=-1)
+        obs = np.concatenate([H_error, empty_action, channel_damage_info], axis=-1)
         self.history_action = empty_action
         observation, info = np.array(obs), {}
         self.cnt = 0

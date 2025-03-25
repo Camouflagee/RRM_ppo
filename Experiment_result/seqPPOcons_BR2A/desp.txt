@@ -1,0 +1,3 @@
+B:burst
+R2:reward type 2: reward_t-reward_(t-1)
+A:adaptive
