@@ -445,3 +445,24 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         observation, info = np.array(obs), {}
         self.cnt = 0
         return observation, info
+    def reset_onlyforbaseline(self, seed=None, options=None):
+        # action = self.action_space.sample().reshape(self.nUE, self.nRB)
+        # todo can we optimize this code ?
+        channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
+        for b_index, b in enumerate(self.BSs):
+            for global_u_index in range(self.nUE):
+                for rb_index in range(self.nRB):
+                    signal_power, channel_power_dB \
+                        = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                    channal_power_set[global_u_index][rb_index] = channel_power_dB
+
+        H = channal_power_set.reshape(-1, )
+        self.history_channel_information = H
+
+        empty_action = np.zeros_like(H)
+        obs = np.concatenate([H, empty_action], axis=-1)
+        self.history_action = empty_action
+        observation, info = np.array(obs), {'CSI': H,
+                                            'CSI_error': H + np.random.uniform(size=H.shape)*self.get_n0()}
+        self.cnt = 0
+        return observation, info

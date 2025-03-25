@@ -19,7 +19,7 @@ sce = env_args
 # ]
 burst_prob = 0.8
 isNoiseH = True
-isBurst = True
+isBurst = False
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
     np.random.seed(0)
@@ -29,7 +29,7 @@ for idx, (nUE, nRB) in enumerate(
     print()
     print(f"场景: UE{nUE}RB{nRB}")
     # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
-    init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
+    init_env = load_env(f'Experiment_result/seqPPOcons_BR2A/UE{nUE}RB{nRB}/ENV/env.zip')
 
     test_num = 10
     for loop in range(test_num):
@@ -57,12 +57,14 @@ for idx, (nUE, nRB) in enumerate(
         P = np.ones((K, U)) * P_constant
         H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
         H = (1 / H_uk).reshape(U, K).transpose()
+
         if isBurst and burst_prob:
             user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
             user_burst_mat=np.repeat(user_burst[None, :], nRB, axis=0)
-        user_burst=np.random.rand(nUE) < burst_prob
         if isNoiseH:
-            H_error = H + np.random.uniform(size=H.shape)*n0 # add noise to H
+            # H_error = H + np.random.uniform(size=H.shape)*n0 # add noise to H
+            H_uk_error = 10 ** (info['CSI_error'] / 10)  # info['CSI']: unit dBm
+            H_error = (1 / H_uk_error).reshape(U, K).transpose()
             H_norm_sq = H_error # This H is used by algorithm
         else:
             H_norm_sq = H # This H is used by algorithm
@@ -244,9 +246,11 @@ for idx, (nUE, nRB) in enumerate(
 
 
         # 计算目标函数值
-        def compute_rate(a, P, H_norm_sq, n0):
+        def compute_rate(a, P, _H, n0, _user_burst_mat=None):
             rate = 0
             K, U = a.shape
+            if _user_burst_mat:
+                _H=_H*_user_burst_mat
             for k in range(K):
                 for u in range(U):
                     # if isBurst and user_burst[U] == 0:  # 如果用户没有数据请求，跳过
@@ -255,9 +259,9 @@ for idx, (nUE, nRB) in enumerate(
                     inter = 0
                     for up in range(U):
                         if up != u:
-                            inter += a[k, up] * P[k, up] * H_norm_sq[k, up]
+                            inter += a[k, up] * P[k, up] * _H[k, up]
                     I_ku = inter + n0
-                    gamma = (a[k, u] * P[k, u] * H_norm_sq[k, u]) / I_ku
+                    gamma = (a[k, u] * P[k, u] * _H[k, u]) / I_ku
                     rate += np.log(1 + gamma)
             return rate
 
@@ -324,14 +328,12 @@ for idx, (nUE, nRB) in enumerate(
             a = a_new
 
         a_opt = a
-        a_opt_discrete = a_opt
+        a_opt_discrete = a
         for u in range(U):
-            a_opt_discrete[:, u] = randomized_round_project(a_opt_discrete[:, u], N_rb)
-        if isBurst:
-            H_compute = H
-        opt_obj = compute_rate(a_opt, P, H_compute, n0) * BW // 10 ** 6
+            a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u], N_rb) #randomized_round_project
+        opt_obj = compute_rate(a_opt, P, H, n0) * BW // 10 ** 6
         res.append(opt_obj)
-        opt_obj_discrete = compute_rate(a_opt_discrete, P, H_compute, n0) * BW // 10 ** 6
+        opt_obj_discrete = compute_rate(a_opt_discrete, P, H, n0) * BW // 10 ** 6
         res_proj.append(opt_obj_discrete)
         num_pair.append(sum(sum(a_opt_discrete)))
         # print("最优目标值：", opt_obj)

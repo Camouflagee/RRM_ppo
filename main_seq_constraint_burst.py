@@ -123,7 +123,7 @@ if __name__ == '__main__':
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    isBurst = True
+    isBurst = False
     burstprob = 0.8
     idx=0
     for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
