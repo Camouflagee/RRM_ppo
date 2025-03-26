@@ -185,6 +185,17 @@ class Environment(gym.Env):
         # return the environmental noise # note: not dB
         return 10 ** (self.sce.N0 / 10) * self.sce.BW
 
+    def get_estimated_H(self, H: np.ndarray, error_percentage: float):
+        # 设置估计误差比例
+        # error_percentage = 0.05  # 5%
+
+        # 生成噪声矩阵，噪声的标准差是原始矩阵值的 5%（相对误差）
+        noise_matrix = np.random.normal(loc=0, scale=error_percentage * np.abs(H), size=H.shape)
+
+        estimated_H = H + noise_matrix
+
+        return estimated_H
+
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.distance_matrix = self.get_distance_matrix()

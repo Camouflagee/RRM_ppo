@@ -366,6 +366,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.history_channel_information_error = None
+        self.error_percent=None
 
     def set_obs_act_space(self):
         # set obs and action space based on env's info
@@ -383,14 +384,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                                                     dtype=self.dtype)
         self.history_channel_information_error = None
 
-    def get_estimated_H(self, H):
-        """
-        Returns the estimated channel information (CSI/RSRP),
-        \hat_{H} = H + error/noise,
-        The noise should be implemented as the noise depending on the last time-slot noise.
-        :return:
-        """
-        pass
+
 
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
@@ -432,7 +426,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                     channal_power_set[global_u_index][rb_index] = channel_power
         self.last_total_rate = 0
         H = channal_power_set.reshape(-1, )
-        H_error = H + np.random.uniform(size=H.shape)*self.get_n0()
+        H_error = self.get_estimated_H(H, self.error_percent)
         self.history_channel_information_error = H_error
         self.history_channel_information = H  # dBm
         self.episode_cnt += 1

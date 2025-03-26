@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 
 
 def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args, tr_args, load_env_path,
-            load_model_path, isBurst, burstprob):
+            load_model_path, isBurst, burstprob, error_percent):
     time_log_folder, time_eval_log_dir = get_TimeLogEvalDir(
         log_root='Experiment_result',
         model_name=_version,
@@ -34,11 +34,14 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
             unwrapped_env = init_env
     else:
         unwrapped_env = SequenceDecisionAdaptiveEnvironmentSB3(env_args)
-        save_model_env(time_log_folder, _version, '', None, unwrapped_env)
     if isBurst and burstprob:
         unwrapped_env.isBurstScenario = isBurst
         unwrapped_env.burst_prob = burstprob
         unwrapped_env.set_user_burst()
+    if error_percent:
+        unwrapped_env.error_percent = error_percent
+    save_model_env(time_log_folder, _version, '', None, unwrapped_env)
+
     # 保存env及其环境的图
     collect_rollout_steps = 2048 if episode_length * 5 <= 2048 else episode_length * 5
     env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
@@ -117,30 +120,52 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A'
+    _version = 'seqPPOcons_R2A2'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     isBurst = False
+    isAdaptive = False
     burstprob = 0.8
     idx=0
+
+    # for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+    #     if idx == 0:
+    #         continue
+    #     error_percent=0.05
+    #     _envName = f'UE{nUE}RB{nRB}'
+    #     _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
+    #     _env_args.nUEs = nUE
+    #     _env_args.nRBs = nRB
+    #     _total_timesteps = 800000
+    #     _load_env_path = f'Experiment_result/seqPPOcons_BR2A/UE{nUE}RB{nRB}/ENV/env.zip'
+    #     _load_model_path = None
+    #
+    #     trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
+    #             _load_model_path, isBurst, burstprob, isAdaptive, error_percent)
+    #     print(f'UE{nUE}RB{nRB} training is done')
     for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-        if idx == 0:
+        if idx != 2:
             continue
-        _envName = f'UE{nUE}RB{nRB}'
-        _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
-        _env_args.nUEs = nUE
-        _env_args.nRBs = nRB
-        _total_timesteps = 800000
-        _load_env_path = f'Experiment_result/seqPPOcons_BR2A/UE{nUE}RB{nRB}/ENV/env.zip'
-        _load_model_path = None
+        for _error_percent in [0.05, 0.1, 0.15]: # 0.01,
+            print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent}')
+            _envName = f'UE{nUE}RB{nRB}'
+            _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
+            _env_args.nUEs = nUE
+            _env_args.nRBs = nRB
+            _total_timesteps = 400000
+            _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
+            _load_model_path = None
 
-        trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
-                _load_model_path, isBurst, burstprob)
-        print(f'UE{nUE}RB{nRB} training is done')
-
+            trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
+                    _load_model_path, isBurst, burstprob, _error_percent)
+            print(f'UE{nUE}RB{nRB} training is done')
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.
+# info:
+# if we use reward model 2, the training step is shorter than those of reward model 1
+# reward model 2 = obj_t - obj_(t-1)
+# reward model 1 = obj_t
