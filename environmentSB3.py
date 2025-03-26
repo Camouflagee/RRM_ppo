@@ -456,7 +456,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         empty_action = np.zeros_like(H)
         obs = np.concatenate([H, empty_action], axis=-1)
         self.history_action = empty_action
-        observation, info = np.array(obs), {'CSI': H,
-                                            'CSI_error': H + np.random.uniform(size=H.shape)*self.get_n0()}
+        observation, info = np.array(obs), {'CSI': H,}
+                                            # 'CSI_error_': self.get_estimated_H(H, self.error_percent),}
         self.cnt = 0
         return observation, info
