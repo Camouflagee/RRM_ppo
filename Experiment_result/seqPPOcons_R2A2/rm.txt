@@ -1,0 +1,3 @@
+R2A2:
+    R2: reward model 2: obj_t - obj_(t-1)
+    A1: adaptive scenario, noise setting2: noise_matrix = np.random.normal(loc=0, scale=error_percentage * np.abs(H), size=H.shape)

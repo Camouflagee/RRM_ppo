@@ -129,7 +129,7 @@ if __name__ == '__main__':
     isBurst = False
     isAdaptive = False
     burstprob = 0.8
-    idx=0
+    idx = 0
 
     # for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
     #     if idx == 0:
@@ -146,11 +146,13 @@ if __name__ == '__main__':
     #     trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
     #             _load_model_path, isBurst, burstprob, isAdaptive, error_percent)
     #     print(f'UE{nUE}RB{nRB} training is done')
-    for idx, (nUE, nRB, _episode_length) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27, 40])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-        if idx in [2,3]:
+    for idx, (nUE, nRB, _episode_length, Nrb) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27,
+                                                                                              40], [5, 10, 15, 20])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+        if idx in [3]:
             continue
-        for _error_percent in [0.01,0.2,0.3,1]: # 0.01,0.05,0.1,0.15
+        for _error_percent in [0.01, 0.2, 0.3, 1]:  # 0.01,0.05,0.1,0.15
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent}')
+            _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
             _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
