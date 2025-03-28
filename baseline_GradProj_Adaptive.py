@@ -189,17 +189,16 @@ for idx, (nUE, nRB) in enumerate(
     BW = env.sce.BW
     # 噪声功率 n0 和每用户的资源约束 N_rb
     n0 = env.get_n0()  # 噪声功率
-    N_rb = nRB//2
+    N_rb = 15
     # env.sce.rbg_Nb if env.sce.rbg_Nb is not None else env.sce.Nrb  # 每个用户在所有资源块上分配量之和上限
     print()
-    print("*" * 30, f"场景: UE{nUE}RB{nRB}_Nrb{N_rb}", "*" * 30)
-    print(f'env_path: {env_path}')
-
+    print("*" * 30, f"场景: UE{nUE}RB{nRB}", "*" * 30)
     test_num = 10
-    _error_percent_list = [0, 0.4,0.5] if is_H_noise else [0]
+    _error_percent_list = [0, 0.05, 0.1, 0.2] if is_H_noise else [0]
     # _error_percent_list = [0]
     for _error_percent in _error_percent_list:
         print("=" * 10, f"场景: UE{nUE}RB{nRB} - error_percent: {_error_percent}", "=" * 10)
+        print(f'env_path: {env_path}')
         error_percent = _error_percent
         for loop in range(test_num):
             # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
@@ -258,7 +257,7 @@ for idx, (nUE, nRB) in enumerate(
 
             def projection(a_u, N_rb):
                 # the projection used in the algorithm
-                return quadratic_projection(a_u, N_rb)
+                return continue_projection(a_u, N_rb)
 
 
             # 计算目标函数值
@@ -346,21 +345,17 @@ for idx, (nUE, nRB) in enumerate(
             a_opt = a
             a_opt_discrete = copy.deepcopy(a)
             for u in range(U):
-                a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u],
+                a_opt_discrete[:, u] = randomized_round_projection(a_opt_discrete[:, u],
                                                                  N_rb)  # randomized_round_project
-            # opt_obj = compute_rate(a_opt, P, H, n0) * BW // 10 ** 6
-            opt_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), info['CSI'])[0]
+            opt_obj = compute_rate(a_opt, P, H, n0) * BW // 10 ** 6
             res.append(opt_obj)
-            # a_opt_discrete = compute_rate(a_opt_discrete, P, H, n0) * BW // 10 ** 6
-            opt_obj_discrete = env.cal_sumrate_givenH(a_opt_discrete.reshape(K, U).transpose(), info['CSI'])[0]
+            opt_obj_discrete = compute_rate(a_opt_discrete, P, H, n0) * BW // 10 ** 6
             res_proj.append(opt_obj_discrete)
             num_pair.append(sum(sum(a_opt_discrete)))
             if is_H_noise:
-                # adaptive_h_error_obj = compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
-                adaptive_h_error_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), H_error_dB)[0]
+                adaptive_h_error_obj = compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
                 adaptive_h_error_obj_list.append(adaptive_h_error_obj)
-                # adaptive_h_error_obj_discrete = compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6
-                adaptive_h_error_obj_discrete = env.cal_sumrate_givenH(a_opt_discrete.reshape(K, U).transpose(), H_error_dB)[0]
+                adaptive_h_error_obj_discrete = compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6
                 adaptive_h_error_obj_discrete_list.append(adaptive_h_error_obj_discrete)
             # print("最优目标值：", opt_obj)
             # print("最优资源分配 a_opt:")
