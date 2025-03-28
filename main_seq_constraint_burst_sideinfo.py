@@ -38,8 +38,8 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
         unwrapped_env.isBurstScenario = isBurst
         unwrapped_env.burst_prob = burstprob
         unwrapped_env.set_user_burst()
-    if error_percent:
-        unwrapped_env.error_percent = error_percent
+    # if error_percent:
+    unwrapped_env.error_percent = error_percent
     save_model_env(time_log_folder, _version, '', None, unwrapped_env)
 
     # 保存env及其环境的图
@@ -146,11 +146,12 @@ if __name__ == '__main__':
     #     trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
     #             _load_model_path, isBurst, burstprob, isAdaptive, error_percent)
     #     print(f'UE{nUE}RB{nRB} training is done')
-    for idx, (nUE, nRB, _episode_length, Nrb) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [12, 21, 27,
-                                                                                              40], [5, 10, 15, 20])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-        if idx in [3]:
+    for idx, (nUE, nRB, _episode_length, Nrb) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [25, 100, 180,300]
+                                                                                              , [5, 10, 15, 20])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+        if idx in [0,1,3]:
             continue
-        for _error_percent in [0.01, 0.2, 0.3, 1]:  # 0.01,0.05,0.1,0.15
+        for _error_percent in [0]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.2
+            _episode_length=nUE*Nrb
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent}')
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
