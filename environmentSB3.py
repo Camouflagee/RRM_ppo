@@ -399,7 +399,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         # else:
         total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
         total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error, get_new_CSI=False)
-        channel_damage_info=np.array([total_rate-total_rate_error])
+        channel_damage_info = np.array([total_rate-total_rate_error])
         # self.history_channel_information don't change
         self.cnt += 1
         # # reward model2: r = obj_t- obj_t-1
@@ -410,7 +410,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         # reward = total_rate
         if self.eval_mode:
             reward = total_rate
-        new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
+        new_obs = np.concatenate([self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
         terminated, truncated, info = False, False, {}
         return new_obs, reward, terminated, truncated, info
 

@@ -120,7 +120,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A2'
+    _version = 'seqPPOcons_R2A2_stepVersion2'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
@@ -150,10 +150,10 @@ if __name__ == '__main__':
                                                                                               , [5, 10, 15, 20])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
         if idx in [0,1,3]:
             continue
-        for _error_percent in [0]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.2
+        for _error_percent in [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.2
             _episode_length=nUE*Nrb
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent}')
-            _env_args.Nrb = Nrb
+            _env_args.Nrb = nRB//2
             _envName = f'UE{nUE}RB{nRB}'
             _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
