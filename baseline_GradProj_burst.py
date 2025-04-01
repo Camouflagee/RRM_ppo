@@ -60,8 +60,6 @@ for idx, (nUE, nRB) in enumerate(
             user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
             user_burst_mat=np.repeat(user_burst[None, :], nRB, axis=0)
             H = H*user_burst_mat
-        import numpy as np
-
         # -------------------------------
         # 参数设置（示例设定）
         # -------------------------------
@@ -86,7 +84,7 @@ for idx, (nUE, nRB) in enumerate(
 
         def projection(a_u, N_rb):
             # the projection used in the algorithm
-            return quadratic_projection(a_u, N_rb)
+            return continue_projection(a_u, N_rb)
 
 
         # 定义投影函数，对每个用户独立投影到 [0,1]^K 且 sum(a[:,u]) <= N_rb
