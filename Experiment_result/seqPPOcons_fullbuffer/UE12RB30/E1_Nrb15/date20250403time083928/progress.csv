@@ -1,0 +1,4 @@
+eval/mean_reward,eval/mean_ep_length,time/total_timesteps,train/n_updates,train/entropy_loss,train/value_loss,train/policy_gradient_loss,train/clip_fraction,train/loss,train/clip_range,train/learning_rate,train/approx_kl,train/explained_variance
+39.814369201660156,27.0,1024,,,,,,,,,,
+37.077972412109375,27.0,2048,,,,,,,,,,
+35.92542266845703,27.0,3072,10,-5.885193946957588,87074.01953125,-0.014445423297001981,0.002783203125,37103.7109375,0.2,0.0003,0.0027692737,4.1484832763671875e-05

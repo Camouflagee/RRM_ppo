@@ -178,6 +178,7 @@ for idx, (nUE, nRB) in enumerate(
     res_proj = []
     num_pair = []
     adaptive_h_error_obj_list = []
+    adaptive_h_error_obj_discrete_list=[]
     print()
     print("*" * 30, f"场景: UE{nUE}RB{nRB}", "*" * 30)
     # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')

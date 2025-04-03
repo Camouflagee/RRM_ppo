@@ -113,14 +113,16 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons'
+    _version = 'seqPPOcons_fullbuffer'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    for idx, (nUE, nRB, epl) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40],[12,21,27,40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-        if idx != 1:
+    for idx, (nUE, nRB, epl) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40],
+                                              [12, 21, 27, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+        _env_args.Nrb = 15
+        if idx != 2:
             continue
         _episode_length = epl
         _envName = f'UE{nUE}RB{nRB}'

@@ -1,3 +1,4 @@
+import copy
 import sys
 
 import cvxpy as cp
@@ -20,6 +21,8 @@ sce = env_args
 burst_prob=0.8
 isBurst = True
 for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+    if idx !=2:
+        continue
     np.random.seed(0)
     res=[]
     res_proj=[]
@@ -299,9 +302,9 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
 
 
         a_opt = a
-        a_opt_discrete=a_opt
+        a_opt_discrete=copy.deepcopy(a)
         for u in range(U):
-            a_opt_discrete[:, u] = randomized_round_project(a_opt_discrete[:, u], N_rb)
+            a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u], N_rb)
         opt_obj=compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
         res.append(opt_obj)
         opt_obj_discrete=compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6

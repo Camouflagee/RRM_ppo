@@ -196,7 +196,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         self.set_obs_act_space()
         self.set_user_burst()
         self.eval_mode = False
-
+        self.use_sideinfo=False
     def set_user_burst(self):
         if self.isBurstScenario:
             # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
@@ -306,11 +306,11 @@ class SequenceDecisionEnvironmentSB3(Environment):
         # self.history_channel_information don't change
         self.cnt += 1
         # # reward model2: r = obj_t- obj_t-1
-        # reward = total_rate - self.last_total_rate
-        # self.last_total_rate = total_rate
+        reward = total_rate - self.last_total_rate
+        self.last_total_rate = total_rate
 
         # reward model1: r = obj_t
-        reward = total_rate
+        # reward = total_rate
         if self.eval_mode:
             reward = total_rate
         new_obs = np.concatenate([self.history_channel_information, self.history_action.reshape(-1, )], axis=-1)
@@ -399,7 +399,10 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         # else:
         total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
         total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error, get_new_CSI=False)
-        channel_damage_info=np.array([total_rate-total_rate_error])
+        if self.use_sideinfo:
+            channel_damage_info=np.array([total_rate-total_rate_error])
+        else:
+            channel_damage_info=np.array([0])
         # self.history_channel_information don't change
         self.cnt += 1
         # # reward model2: r = obj_t- obj_t-1
