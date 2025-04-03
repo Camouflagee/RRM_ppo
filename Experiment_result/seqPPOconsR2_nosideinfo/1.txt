@@ -1,0 +1,3 @@
+noside = no A
+
+R2, not R2A

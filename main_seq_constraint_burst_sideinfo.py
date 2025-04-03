@@ -151,8 +151,9 @@ if __name__ == '__main__':
             , [5, 10, 15, 20])):  # 15,40,40; 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
         if idx in [0, 1, 3]:
             continue
-        for _error_percent in [0.1, 0.2, 0.3, 0.4]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.2
+        for _error_percent in [0.6]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.2
             _episode_length = nUE * Nrb
+            _usesideinfo=False
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent}')
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
@@ -162,7 +163,6 @@ if __name__ == '__main__':
             _total_timesteps = 400000
             _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
             _load_model_path = None
-            _usesideinfo=False
             trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                     _load_model_path, isBurst, burstprob, _error_percent, _usesideinfo)
             print(f'UE{nUE}RB{nRB} training is done')

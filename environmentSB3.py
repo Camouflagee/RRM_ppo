@@ -196,7 +196,6 @@ class SequenceDecisionEnvironmentSB3(Environment):
         self.set_obs_act_space()
         self.set_user_burst()
         self.eval_mode = False
-        self.use_sideinfo=False
     def set_user_burst(self):
         if self.isBurstScenario:
             # 用户 burst 状态：1 表示有数据请求，0 表示无数据请求
@@ -367,7 +366,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         super().__init__(*args, **kwargs)
         self.history_channel_information_error = None
         self.error_percent=None
-
+        self.use_sideinfo=None
     def set_obs_act_space(self):
         # set obs and action space based on env's info
         # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
