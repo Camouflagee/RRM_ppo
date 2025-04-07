@@ -7,6 +7,7 @@ import yaml
 
 from environmentSB3 import SequenceDecisionEnvironmentSB3
 from utils import load_env, DotDic, Logger
+import numpy as np
 
 with open('config/config_environment_setting.yaml', 'r') as file:
     env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
@@ -60,7 +61,6 @@ for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40])):# 12,30
         H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
         H = (1 / H_uk).reshape(U, K).transpose()
 
-        import numpy as np
 
         # -------------------------------
         # 参数设置（示例设定）

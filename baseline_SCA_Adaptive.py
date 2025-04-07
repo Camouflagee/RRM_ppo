@@ -73,7 +73,7 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
                     ( sum_{u' != u} a_{k,u'} * P[k,u] * |H[k,u']|^2 + n0 )
 
     参数:
-      H:   shape = (K, U),  H[k,u] 表示子载波k, 用户u 的信道增益(可为复数模平方或其他已知量).
+      H:   shape = (K, U),  H[k,u] 表示子载波k, 用户u 的信道增益, 注无需平方计算, H已经平方计算过了.
       P:   shape = (K, U),  P[k,u] 表示在子载波k 为用户u 分配的功率(或功率上限).
       n0:  噪声功率 (标量).
       max_iter:    最大迭代次数.
@@ -215,26 +215,13 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
         #     break
     return a_current, obj_vals
 
-
-# ---------- 初始化 a^{(0)} ----------
-# 这里给个简单初始化:
-# 可采用均匀分配, 或随机初始化, 或贪婪初始化等
-# a_init = np.random.rand(K, U)  # 随机(0,1)
-# a_init = np.clip(a_init, 0, 0.3)
-# print('a_init: ', a_init)
-# # 均匀分配
-# # a_current = np.full((K, U), N_rb / K)
-# a_opt, obj_vals = sca_log_rate_maximization(a_init, H, P, n0, solver=cp.MOSEK, max_iter=500, tol=1e-5)
-# print("Optimized allocation a:\n", np.round(a_opt, 2))
-# print("Objective value history:\n", obj_vals)
-# print('env: ', env.cal_sumrate_givenH(a_opt.reshape(K,U).transpose(), info['CSI'])[0])
-# print("Optimized allocation a:", np.array2string(a_opt, separator=', '))
-# print('done')
-
+is_H_estimated=True
 testnum = 5
 sol_sce_dict = {}
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+    if idx != 2:
+        continue
     sol_list = []
     obj_list = []
     print("=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
@@ -259,42 +246,54 @@ for idx, (nUE, nRB) in enumerate(
     P_constant = env.BSs[0].Transmit_Power()
     P = np.ones((K, U)) * P_constant
 
-    obs, info = env.reset_onlyforbaseline()
-    H_uk = 10 ** (info['CSI'] / 10)  # info['CSI']: unit dBm
-    H = (1 / H_uk).reshape(U, K).transpose()
+    _error_percent_list = np.arange(0.2, 0.6, 0.05) if is_H_estimated else [0]
+    for _error_percent in _error_percent_list:
+        print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
+        error_percent = _error_percent
+        for test_idx in range(testnum):
+            obs, info = env.reset_onlyforbaseline()
+            H_dB = info['CSI']# info['CSI']: unit dBm
 
-    for test_idx in range(testnum):
-        a_init = np.random.rand(K, U)  # 随机(0,1)
-        a, _ = sca_log_rate_maximization(a_init, H, P, n0, solver=cp.MOSEK, max_iter=200, tol=1e-3, verbose=False)
-        a_opt_discret = a
-        for u in range(U):
-            a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)
+            if is_H_estimated:
+                H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
+                H_error_uk = 10 ** (H_error_dB / 10)
+                H_error = (1 / H_error_uk).reshape(U, K).transpose()
+                H_norm_sq = H_error  # This H is used by algorithm
+            else:
+                H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
+                H = (1 / H_uk).reshape(U, K).transpose()
+                H_norm_sq = H  # This H is used by algorithm
 
-        obj_discrete = env.cal_sumrate_givenH(a_opt_discret.reshape(K, U).transpose(), info['CSI'])[0]
-        # print("离散映射后最终目标值：", obj_discrete)
-        # print("a_opt_discret:")
-        # print(np.array2string(a_opt_discret, separator=', '))
-        sol_list.append(
+            a_init = np.random.rand(K, U)  # 随机(0,1)
+            a, _ = sca_log_rate_maximization(a_init, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=200, tol=1e-3, verbose=False)
+            a_opt_discret = a
+            for u in range(U):
+                a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)
+
+            obj_discrete = env.cal_sumrate_givenH(a_opt_discret.reshape(K, U).transpose(), info['CSI'])[0]
+            # print("离散映射后最终目标值：", obj_discrete)
+            # print("a_opt_discret:")
+            # print(np.array2string(a_opt_discret, separator=', '))
+            sol_list.append(
+                {
+                    'sol': a_opt_discret,
+                    'H': info['CSI'],
+                    'K': K,
+                    'U': U,
+                    'obj_discrete': obj_discrete
+                }
+            )
+            obj_list.append(obj_discrete)
+        cnt_pair=0
+        for sol in sol_list:
+            cnt_pair += sum(sum(sol['sol']))
+        cnt_pair_avg = cnt_pair/len(sol_list)
+        print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
+        print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
+
+        sol_sce_dict.update(
             {
-                'sol': a_opt_discret,
-                'H': info['CSI'],
-                'K': K,
-                'U': U,
-                'obj_discrete': obj_discrete
+                f'u{nUE}r{nRB}_err{error_percent}': sol_list
             }
         )
-        obj_list.append(obj_discrete)
-    cnt_pair=0
-    for sol in sol_list:
-        cnt_pair += sum(sum(sol['sol']))
-    cnt_pair_avg = cnt_pair/len(sol_list)
-    print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
-    print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
-
-
-    sol_sce_dict.update(
-        {
-            f'u{nUE}r{nRB}': sol_list
-        }
-    )
 print('all test are done')

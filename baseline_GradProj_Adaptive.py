@@ -6,7 +6,7 @@ import yaml
 from pydantic import conint
 
 from environmentSB3 import SequenceDecisionEnvironmentSB3
-from utils import load_env, DotDic, Logger
+from utils import load_env, DotDic
 
 
 def quadratic_projection(x_u, N_rb):
@@ -167,7 +167,7 @@ sce = env_args
 #     'Experiment_result/seqPPOcons/UE5RB10/ENV/env.zip'
 # ]
 burst_prob = 0.8
-is_H_noise = True
+is_H_estimated = True
 isBurst = False
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
@@ -196,10 +196,10 @@ for idx, (nUE, nRB) in enumerate(
     print(f'env_path: {env_path}')
 
     test_num = 10
-    _error_percent_list = [0.6] if is_H_noise else [0]
+    _error_percent_list = np.arange(0.2,0.6,0.05) if is_H_estimated else [0]
     # _error_percent_list = [0]
     for _error_percent in _error_percent_list:
-        print("=" * 10, f"场景: UE{nUE}RB{nRB} - error_percent: {_error_percent}", "=" * 10)
+        print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
         error_percent = _error_percent
         for loop in range(test_num):
             # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
@@ -217,22 +217,21 @@ for idx, (nUE, nRB) in enumerate(
             P_constant = env.BSs[0].Transmit_Power()
             P = np.ones((K, U)) * P_constant
             H_dB = info['CSI']
-            H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
-            H = (1 / H_uk).reshape(U, K).transpose()
 
             if isBurst and burst_prob:
                 user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
                 user_burst_mat = np.repeat(user_burst[None, :], nRB, axis=0)
             # user_burst=np.random.rand(nUE) < burst_prob
-            if is_H_noise:
+            if is_H_estimated:
                 H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
                 H_error_uk = 10 ** (H_error_dB / 10)
                 H_error = (1 / H_error_uk).reshape(U, K).transpose()
                 H_norm_sq = H_error  # This H is used by algorithm
             else:
+                H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
+                H = (1 / H_uk).reshape(U, K).transpose()
                 H_norm_sq = H  # This H is used by algorithm
             # todo check
-            import numpy as np
 
             # -------------------------------
             # 参数设置（示例设定）
@@ -355,7 +354,7 @@ for idx, (nUE, nRB) in enumerate(
             opt_obj_discrete = env.cal_sumrate_givenH(a_opt_discrete.reshape(K, U).transpose(), info['CSI'])[0]
             res_proj.append(opt_obj_discrete)
             num_pair.append(sum(sum(a_opt_discrete)))
-            if is_H_noise:
+            if is_H_estimated:
                 # adaptive_h_error_obj = compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
                 adaptive_h_error_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), H_error_dB)[0]
                 adaptive_h_error_obj_list.append(adaptive_h_error_obj)
@@ -371,7 +370,7 @@ for idx, (nUE, nRB) in enumerate(
             # print(np.array2string(a_opt_discrete, separator=', '))
             # print("="*20,"done:","="*20)
         print(f"{test_num}次实验平均后结果")
-        if is_H_noise:
+        if is_H_estimated:
             print(f"噪声估计信道上最终目标值：{np.mean(adaptive_h_error_obj_list):.2f}", )
             print(f"噪声估计信道上离散最终目标值：{np.mean(adaptive_h_error_obj_discrete_list):.2f}", )
         print(f"真实信道上最终目标值：{np.mean(res):.2f}", )
