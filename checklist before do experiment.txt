@@ -1,0 +1,4 @@
+if you get an inconsistent result, check the following settings:
+1. Episode length should be nUE*N_rb
+2. N_rb (default: nRB // 2)
+3. nUE and nRB of the environment

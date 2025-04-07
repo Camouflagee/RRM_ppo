@@ -15,6 +15,7 @@ from module.sequencepolicy import SequenceActorCriticPolicy
 from policy.sequence_ppo import SequencePPO
 from utils import *
 import warnings
+import shutil
 
 warnings.filterwarnings("ignore")
 
@@ -34,7 +35,8 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
             unwrapped_env = init_env
     else:
         unwrapped_env = SequenceDecisionEnvironmentSB3(env_args)
-        save_model_env(time_log_folder, _version, '', None, unwrapped_env)
+    save_model_env(time_log_folder, _version, '', None, unwrapped_env)
+
     # 保存env及其环境的图
     collect_rollout_steps = 2048 if episode_length * 5 <= 2048 else episode_length * 5
     env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
@@ -83,6 +85,12 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
     with open(os.path.join(time_log_folder, 'config_training_parameters.yaml'), 'w') as file:
         yaml.dump(tr_args, file)
+
+    # 保存当前main代码到实验目录中
+    current_script_path = os.path.abspath(__file__)
+    target_file_path = os.path.join(time_log_folder, os.path.basename(current_script_path))
+    shutil.copy(current_script_path, target_file_path)
+
     # set logger
     logger = configure(time_log_folder, ["tensorboard", "stdout", "csv"])
     model.set_logger(logger)
@@ -119,20 +127,19 @@ if __name__ == '__main__':
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    for idx, (nUE, nRB, epl) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40],
-                                              [12, 21, 27, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-        _env_args.Nrb = 15
+    for idx, (nUE, nRB) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40],)):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
         if idx != 2:
             continue
-        _episode_length = epl
+        N_rb = nRB // 2
+        _env_args.Nrb = N_rb
+        _episode_length = nUE * N_rb
         _envName = f'UE{nUE}RB{nRB}'
         _expNo = f'E1_Nrb{_env_args.Nrb}'  # same expNo has same initialized model parameters
         _env_args.nUEs = nUE
         _env_args.nRBs = nRB
-        _total_timesteps = 600000
+        _total_timesteps = 400000
         _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
         _load_model_path = None
-
         trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                 _load_model_path)
         print(f'UE{nUE}RB{nRB} training is done')
@@ -141,27 +148,3 @@ if __name__ == '__main__':
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.
 
-
-# 场景: UE5RB10
-# 最终目标值： 23.0
-# 投影到离散0-1可行域后最终目标值： 16.0
-# sum:  7.0
-# ==================== done: ====================
-# Converged at iter 114
-# 场景: UE10RB20
-# 最终目标值： 49.0
-# 投影到离散0-1可行域后最终目标值： 42.0
-# sum:  17.0
-# ==================== done: ====================
-# Converged at iter 121
-# 场景: UE12RB30
-# 最终目标值： 77.0
-# 投影到离散0-1可行域后最终目标值： 58.0
-# sum:  22.0
-# ==================== done: ====================
-# Converged at iter 93
-# 场景: UE15RB40
-# 最终目标值： 102.0
-# 投影到离散0-1可行域后最终目标值： 74.0
-# sum:  28.0
-# ==================== done: ====================
