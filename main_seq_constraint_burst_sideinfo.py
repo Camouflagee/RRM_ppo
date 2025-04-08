@@ -140,7 +140,7 @@ if __name__ == '__main__':
     for idx, (nUE, nRB, Nrb) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [5, 10, 15, 20])):
         if idx in [0, 1, 3]:
             continue
-        _error_percent_list = np.arange(25, 60, 5)/100
+        _error_percent_list = np.arange(30, 60, 5)/100
         for _error_percent in _error_percent_list:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
             _episode_length = nUE * Nrb

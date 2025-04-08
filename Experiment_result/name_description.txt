@@ -1,0 +1,33 @@
+PPO = directly use an end-to-end action (a whole, complete solution of the objective function) of a PPO-based agent
+
+seqPPO = use sequence PPO
+
+seqPPOcons = considering constraint  (N_rb)
+
+seqPPOcons_BR2A:{
+'B': use burst scenario (consider a user data request probability)
+'R2': reward model 2 = obj_t-obj_(t-1) # note: reward model 1 = obj_t
+'A': Adaptive = put the estimated H (RSRP) channel info into the observation
+    # note: 1. estimated_H = add noise into the true H
+            2. the obs = [estimated_H, side_info, action_(t-1)]
+}
+seqPPOcons_R2A2 = ↓
+seqPPOcons_R2A3 = ↓
+
+A has 3 version
+    '''
+    there are three kinds of way to add noise on H
+    A = add noise to H (unit db) with noise of normal distribution with scale np.max(np.abs(H)) # this setting has the marker letter 'A' shown in the experiment record folder name
+    A2 = add noise to H (unit db) with noise of normal distribution with scale np.abs(H) # this setting has the marker letter 'A2'
+    all ways above has the the magnitude issue that (it leads to that the convergence issue in SCA baseline due to the huge magnitude difference of elements)
+    A3 = add noise to H (unit real number) with noise of normal distribution with scale np.abs(H) # this setting has the marker letter 'A3'
+    '''
+    see the function get_estimated_H() in the class Environment (environment.py)
+
+R has 2 version
+    R1: reward model 1 = obj_t # not explicitly mentioned in the experiment folder name
+    R2: reward model 2 = obj_t-obj_(t-1)  # notation is R2
+
+nosideinfo:
+ the obs = [estimated_H, side_info, action_(t-1)]
+ where the side_info is always 0
