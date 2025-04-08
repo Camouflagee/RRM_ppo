@@ -192,13 +192,14 @@ class Environment(gym.Env):
         # error_percentage = 0.05  # 5%
 
         # 生成噪声矩阵，噪声的标准差是原始矩阵值的 5%（相对误差） 加性噪声
-        # noise_matrix = np.random.normal(loc=0, scale=error_percentage * np.abs(H), size=H.shape)
-        # estimated_H = H + noise_matrix
-
+        noise_matrix = np.random.normal(loc=0, scale=error_percentage * np.abs(H), size=H.shape)
+        estimated_H = H + noise_matrix
+        estimated_H = np.abs(estimated_H)
+        estimated_H = np.maximum(estimated_H, 1e-10)
         # 生成乘性噪声（1 ± error_percentage）
-        noise_factor = 1 + np.random.normal(loc=0, scale=error_percentage, size=H.shape)
-        estimated_H = H * noise_factor
-        estimated_H = np.maximum(estimated_H, 1e-15)
+        # noise_factor = 1 + np.random.normal(loc=0, scale=error_percentage, size=H.shape)
+        # estimated_H = H * noise_factor
+        # estimated_H = np.maximum(estimated_H, 1e-15)
 
         return estimated_H
 

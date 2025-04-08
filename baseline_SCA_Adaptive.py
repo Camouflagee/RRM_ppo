@@ -324,20 +324,23 @@ for idx, (nUE, nRB) in enumerate(
 
     _error_percent_list = np.arange(0, 0.65, 0.05) if is_H_estimated else [0]
     for _error_percent in _error_percent_list:
-        print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
+        print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
         error_percent = _error_percent
         for test_idx in range(testnum):
             obs, info = env.reset_onlyforbaseline()
             H_dB = info['CSI']# info['CSI']: unit dBm
-
+            H_uk = 10 ** (H_dB / 10)
+            H = (1 / H_uk).reshape(U, K).transpose()
             if is_H_estimated:
-                H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
-                H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
+                # H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error = (1 / H_error_uk).reshape(U, K).transpose()
+                # H_norm_sq = H_error  # This H is used by algorithm
+                H_error_uk = env.get_estimated_H(H_uk, _error_percent)  # add 5% estimated error
                 H_error = (1 / H_error_uk).reshape(U, K).transpose()
-                H_norm_sq = H_error  # This H is used by algorithm
+                H_norm_sq = H_error  # H_norm_sq is used by algorithm
+
             else:
-                H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
-                H = (1 / H_uk).reshape(U, K).transpose()
                 H_norm_sq = H  # This H is used by algorithm
 
             a_init = np.random.rand(K, U)  # 随机(0,1)

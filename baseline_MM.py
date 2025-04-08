@@ -28,7 +28,7 @@ def discrete_project_per_user(x, N_rb):
     return z
 
 
-testnum = 10
+testnum = 50
 sol_sce_dict = {}
 is_H_estimated = True
 
@@ -152,9 +152,9 @@ for idx, (nUE, nRB) in enumerate(
             cnt_pair += sum(sum(sol['sol']))
         cnt_pair_avg = cnt_pair / len(sol_list)
         if is_H_estimated:
-            print(f'error_rate:{error_percent:.3f}')
+            print(f'error_rate:{error_percent:.2f}')
         print(f"{testnum}次实验平均后离散化目标函数值:{np.mean(obj_list):.3f}" )
-        print(f"{testnum}次实验平均后问题解pair数量:{cnt_pair_avg:.1f}" )
+        print(f"{testnum}次实验平均后问题解pair数量:{cnt_pair_avg:.2f}" )
 
         sol_sce_dict.update(
             {

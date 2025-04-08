@@ -186,12 +186,11 @@ for idx, (nUE, nRB) in enumerate(
     P_constant = env.BSs[0].Transmit_Power()
     P = np.ones((K, U)) * P_constant
 
-    _error_percent_list = np.arange(0, 65, 5)/100 if is_H_estimated else [0]
+    _error_percent_list = np.arange(0, 35, 5)/100 if is_H_estimated else [0]
     for _error_percent in _error_percent_list:
         sol_list = []
         obj_list = []
-        _error_percent = np.round(_error_percent, 2)
-        print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
+        print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
         error_percent = _error_percent
         for test_idx in range(testnum):
             obs, info = env.reset_onlyforbaseline()

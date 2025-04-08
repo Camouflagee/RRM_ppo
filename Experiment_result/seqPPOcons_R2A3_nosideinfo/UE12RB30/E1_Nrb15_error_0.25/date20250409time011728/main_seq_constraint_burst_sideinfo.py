@@ -146,7 +146,7 @@ if __name__ == '__main__':
             _episode_length = nUE * Nrb
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
-            _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters
+            _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
             _env_args.nRBs = nRB
             _total_timesteps = 400000

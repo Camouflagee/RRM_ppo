@@ -126,7 +126,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A3_nosideinfo'
+    _version = 'seqPPOcons_R2A3_sideinfo'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
@@ -140,13 +140,13 @@ if __name__ == '__main__':
     for idx, (nUE, nRB, Nrb) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [5, 10, 15, 20])):
         if idx in [0, 1, 3]:
             continue
-        _error_percent_list = np.arange(25, 60, 5)/100
+        _error_percent_list = np.arange(0, 60, 5)/100
         for _error_percent in _error_percent_list:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
-            print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
+            print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent}')
             _episode_length = nUE * Nrb
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
-            _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters
+            _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
             _env_args.nRBs = nRB
             _total_timesteps = 400000

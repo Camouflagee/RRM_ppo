@@ -206,7 +206,7 @@ for idx, (nUE, nRB) in enumerate(
     # _error_percent_list = [np.round(i, 2) for i in _error_percent_list]
     # _error_percent_list = [0]
     for _error_percent in _error_percent_list:
-        print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
+        print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
         error_percent = _error_percent
         for loop in range(test_num):
             # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
@@ -242,7 +242,6 @@ for idx, (nUE, nRB) in enumerate(
                 H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
                 H = (1 / H_uk).reshape(U, K).transpose()
                 H_norm_sq = H  # This H is used by algorithm
-            # todo check
 
             # -------------------------------
             # 参数设置（示例设定）
@@ -254,7 +253,7 @@ for idx, (nUE, nRB) in enumerate(
 
             # 梯度上升参数
             max_iters = 300
-            eta = 0.01  # 学习率
+            eta = 0.06  # 学习率
             tol = 1e-4  # 收敛阈值
 
             # -------------------------------
@@ -355,10 +354,9 @@ for idx, (nUE, nRB) in enumerate(
 
             a_opt = a
             a_opt_discrete = copy.deepcopy(a)
-            # for u in range(U):
-            #     a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u],
-            #                                                      N_rb)  # randomized_round_project
-
+            for u in range(U):
+                a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u],
+                                                                 N_rb)  # randomized_round_project
             # opt_obj = compute_rate(a_opt, P, H, n0) * BW // 10 ** 6
             opt_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), info['CSI'])[0]
             res.append(opt_obj)
