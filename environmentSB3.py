@@ -427,16 +427,18 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                         = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
                     channal_power_set[global_u_index][rb_index] = channel_power
         self.last_total_rate = 0
-        H = channal_power_set.reshape(-1, )
-        H_error = self.get_estimated_H(H, self.error_percent)
-        self.history_channel_information_error = H_error
-        self.history_channel_information = H  # dBm
+        H_dB = channal_power_set.reshape(-1, )
+        H_uk= 10 ** (H_dB/10)
+        H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
+        H_error_dB = 10*np.log10(H_error_uk)
+        self.history_channel_information_error = H_error_dB # dBm
+        self.history_channel_information = H_dB  # dBm
         self.episode_cnt += 1
         if self.isBurstScenario and self.episode_cnt % 10 == 0:
             self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
         channel_damage_info = np.array([0])
-        empty_action = np.zeros_like(H)
-        obs = np.concatenate([H_error, empty_action, channel_damage_info], axis=-1)
+        empty_action = np.zeros_like(H_dB)
+        obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
         self.history_action = empty_action
         observation, info = np.array(obs), {}
         self.cnt = 0

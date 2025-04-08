@@ -7,7 +7,13 @@ from pydantic import conint
 
 from environmentSB3 import SequenceDecisionEnvironmentSB3
 from utils import load_env, DotDic
-
+'''
+there are three kinds of way to add noise on H
+1. add noise to H (unit db) with noise of normal distribution with scale np.max(np.abs(H)) # this setting has the marker letter 'A' shown in the experiment record folder name
+2. add noise to H (unit db) with noise of normal distribution with scale np.abs(H) # this setting has the marker letter 'A2'
+all ways above has the the magnitude issue that (it leads to that the convergence issue in SCA baseline due to the huge magnitude difference of elements)
+3. add noise to H (unit real number) with noise of normal distribution with scale np.abs(H) # this setting has the marker letter 'A3'
+'''
 
 def quadratic_projection(x_u, N_rb):
     """
@@ -171,14 +177,14 @@ is_H_estimated = True
 isBurst = False
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
-    if idx in [0,1,3]:
+    if idx in [0, 1, 3]:
         continue
     np.random.seed(0)
     res = []
     res_proj = []
     num_pair = []
     adaptive_h_error_obj_list = []
-    adaptive_h_error_obj_discrete_list =[]
+    adaptive_h_error_obj_discrete_list = []
     # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
     env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
 
@@ -189,14 +195,15 @@ for idx, (nUE, nRB) in enumerate(
     BW = env.sce.BW
     # 噪声功率 n0 和每用户的资源约束 N_rb
     n0 = env.get_n0()  # 噪声功率
-    N_rb = nRB//2
+    N_rb = nRB // 2
     # env.sce.rbg_Nb if env.sce.rbg_Nb is not None else env.sce.Nrb  # 每个用户在所有资源块上分配量之和上限
     print()
     print("*" * 30, f"场景: UE{nUE}RB{nRB}_Nrb{N_rb}", "*" * 30)
     print(f'env_path: {env_path}')
 
     test_num = 10
-    _error_percent_list = np.arange(0.2,0.6,0.05) if is_H_estimated else [0]
+    _error_percent_list = np.arange(0, 65, 5)/100 if is_H_estimated else [0]
+    # _error_percent_list = [np.round(i, 2) for i in _error_percent_list]
     # _error_percent_list = [0]
     for _error_percent in _error_percent_list:
         print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
@@ -217,14 +224,18 @@ for idx, (nUE, nRB) in enumerate(
             P_constant = env.BSs[0].Transmit_Power()
             P = np.ones((K, U)) * P_constant
             H_dB = info['CSI']
-
+            H_uk = 10 ** (H_dB / 10)
             if isBurst and burst_prob:
                 user_burst = np.random.rand(nUE) < burst_prob  # Shape: (nUE,)
                 user_burst_mat = np.repeat(user_burst[None, :], nRB, axis=0)
             # user_burst=np.random.rand(nUE) < burst_prob
             if is_H_estimated:
-                H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
-                H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
+                # H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error = (1 / H_error_uk).reshape(U, K).transpose()
+                # H_norm_sq = H_error  # This H is used by algorithm
+
+                H_error_uk = env.get_estimated_H(H_uk, _error_percent)  # add 5% estimated error
                 H_error = (1 / H_error_uk).reshape(U, K).transpose()
                 H_norm_sq = H_error  # This H is used by algorithm
             else:
@@ -344,9 +355,10 @@ for idx, (nUE, nRB) in enumerate(
 
             a_opt = a
             a_opt_discrete = copy.deepcopy(a)
-            for u in range(U):
-                a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u],
-                                                                 N_rb)  # randomized_round_project
+            # for u in range(U):
+            #     a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u],
+            #                                                      N_rb)  # randomized_round_project
+
             # opt_obj = compute_rate(a_opt, P, H, n0) * BW // 10 ** 6
             opt_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), info['CSI'])[0]
             res.append(opt_obj)
@@ -356,10 +368,11 @@ for idx, (nUE, nRB) in enumerate(
             num_pair.append(sum(sum(a_opt_discrete)))
             if is_H_estimated:
                 # adaptive_h_error_obj = compute_rate(a_opt, P, H_norm_sq, n0) * BW // 10 ** 6
-                adaptive_h_error_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), H_error_dB)[0]
+                adaptive_h_error_obj = env.cal_sumrate_givenH(a_opt.reshape(K, U).transpose(), 10*np.log10(H_error_uk))[0]
                 adaptive_h_error_obj_list.append(adaptive_h_error_obj)
                 # adaptive_h_error_obj_discrete = compute_rate(a_opt_discrete, P, H_norm_sq, n0) * BW // 10 ** 6
-                adaptive_h_error_obj_discrete = env.cal_sumrate_givenH(a_opt_discrete.reshape(K, U).transpose(), H_error_dB)[0]
+                adaptive_h_error_obj_discrete = \
+                env.cal_sumrate_givenH(a_opt_discrete.reshape(K, U).transpose(), 10*np.log10(H_error_uk))[0]
                 adaptive_h_error_obj_discrete_list.append(adaptive_h_error_obj_discrete)
             # print("最优目标值：", opt_obj)
             # print("最优资源分配 a_opt:")

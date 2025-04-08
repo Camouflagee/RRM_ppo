@@ -214,6 +214,82 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
         #     print(f"Converged at iteration: {t}")
         #     break
     return a_current, obj_vals
+def sca_log_rate_maximization_vec(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False):
+    K, U = H.shape
+    a_current = init_a.copy()
+    obj_vals = []
+    flag=False
+    for t in range(max_iter):
+        # Vectorized computation of I_val
+        I_val = np.zeros((K, U))
+        for k in range(K):
+            a_k = a_current[k]
+            H_k = H[k]
+            P_k = P[k]
+            sum_all = np.sum(a_k * H_k)
+            sum_without_u = sum_all - a_k * H_k
+            I_val[k] = sum_without_u * P_k + n0
+
+        # CVXPY problem setup with vectorized operations
+        a_var = cp.Variable((K, U), nonneg=True)
+        sum_log_S = 0
+        for k in range(K):
+            P_k = P[k, :]
+            H_k = H[k, :]
+            # Construct P_k_H matrix (U, U) where each row u is P_k[u] * H_k
+            P_k_H = cp.outer(P_k, H_k)
+            sum_terms = P_k_H @ a_var[k, :]
+            S_k = n0 + sum_terms
+            sum_log_S += cp.sum(cp.log(S_k))
+
+        # Vectorized computation of sum_linear_approx
+        sum_cst_terms = -np.sum(np.log(I_val))
+        sum_grad_terms = 0
+        for k in range(K):
+            P_k = P[k, :]
+            H_k = H[k, :]
+            I_k = I_val[k, :]
+            # Compute gradient coefficients matrix (U, U)
+            grad_coeff = -np.outer(P_k, H_k) / I_k[:, None]
+            np.fill_diagonal(grad_coeff, 0)
+            a_diff = a_var[k, :] - a_current[k, :]
+            sum_grad_terms += cp.sum(grad_coeff @ a_diff)
+        sum_linear_approx = sum_cst_terms + sum_grad_terms
+
+        # Objective and constraints
+        obj_expr = sum_log_S + sum_linear_approx
+        constraints = [a_var <= 1, a_var >= 0]
+        problem = cp.Problem(cp.Maximize(obj_expr), constraints)
+        problem.solve(solver=solver, verbose=verbose)
+
+        if problem.status not in ["optimal", "optimal_inaccurate"]:
+            flag=True
+            break
+
+        a_next = a_var.value
+        a_current = a_next.copy()
+
+        # Vectorized objective calculation
+        gamma = np.zeros((K, U))
+        for k in range(K):
+            a_k = a_current[k]
+            P_k = P[k]
+            H_k = H[k]
+            sum_matrix = a_k[None, :] * P_k[:, None] * H_k[None, :]
+            sum_all = np.sum(sum_matrix, axis=1)
+            numerator = np.diag(sum_matrix)
+            denominator = sum_all - numerator + n0
+            gamma[k] = numerator / (denominator + 1e-15)
+        obj_val = np.sum(np.log(1 + gamma))
+        obj_vals.append(obj_val)
+
+        if t > 0 and abs(obj_vals[-1] - obj_vals[-2]) < tol:
+            if verbose:
+                print(f"Converged at iteration {t}")
+            break
+    if flag:
+        print('Warning: Solver did not converge.')
+    return a_current, obj_vals
 
 is_H_estimated=True
 testnum = 5
@@ -246,7 +322,7 @@ for idx, (nUE, nRB) in enumerate(
     P_constant = env.BSs[0].Transmit_Power()
     P = np.ones((K, U)) * P_constant
 
-    _error_percent_list = np.arange(0.2, 0.6, 0.05) if is_H_estimated else [0]
+    _error_percent_list = np.arange(0, 0.65, 0.05) if is_H_estimated else [0]
     for _error_percent in _error_percent_list:
         print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
         error_percent = _error_percent
@@ -265,7 +341,7 @@ for idx, (nUE, nRB) in enumerate(
                 H_norm_sq = H  # This H is used by algorithm
 
             a_init = np.random.rand(K, U)  # 随机(0,1)
-            a, _ = sca_log_rate_maximization(a_init, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=200, tol=1e-3, verbose=False)
+            a, _ = sca_log_rate_maximization_vec(a_init, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False)
             a_opt_discret = a
             for u in range(U):
                 a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)

@@ -1,3 +1,4 @@
+import copy
 import time
 
 import cvxpy as cp
@@ -24,6 +25,13 @@ from utils import load_env, DotDic, Logger
 1. we use SCA to get the raw solution but not satisfying the constraint
 2. use the discrete projection to get the solution satisfying the constraint
 """
+'''
+there are three kinds of way to add noise on H
+1. add noise to H (unit db) with noise of normal distribution with scale np.max(np.abs(H)) # this setting has the marker letter 'A' shown in the experiment record folder name
+2. add noise to H (unit db) with noise of normal distribution with scale np.abs(H) # this setting has the marker letter 'A2'
+all ways above has the the magnitude issue that (it leads to that the convergence issue in SCA baseline due to the huge magnitude difference of elements)
+3. add noise to H (unit real number) with noise of normal distribution with scale np.abs(H)
+'''
 
 # ============================
 # 1. 参数设置
@@ -69,11 +77,11 @@ import numpy as np
 import cvxpy as cp
 
 
-def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False):
+def sca_log_rate_maximization_vec(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False):
     K, U = H.shape
     a_current = init_a.copy()
     obj_vals = []
-    flag=False
+    flag = False
     for t in range(max_iter):
         # Vectorized computation of I_val
         I_val = np.zeros((K, U))
@@ -81,9 +89,9 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
             a_k = a_current[k]
             H_k = H[k]
             P_k = P[k]
-            sum_all = np.sum(a_k * H_k)
-            sum_without_u = sum_all - a_k * H_k
-            I_val[k] = sum_without_u * P_k + n0
+            sum_all = np.sum(a_k * H_k * P_k)
+            sum_without_u = sum_all - a_k * H_k * P_k
+            I_val[k] = sum_without_u + n0
 
         # CVXPY problem setup with vectorized operations
         a_var = cp.Variable((K, U), nonneg=True)
@@ -105,7 +113,7 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
             H_k = H[k, :]
             I_k = I_val[k, :]
             # Compute gradient coefficients matrix (U, U)
-            grad_coeff = -np.outer(P_k, H_k) / I_k[:, None]
+            grad_coeff = -np.outer(P_k, H_k) / (I_k[:, None]+1e-15)
             np.fill_diagonal(grad_coeff, 0)
             a_diff = a_var[k, :] - a_current[k, :]
             sum_grad_terms += cp.sum(grad_coeff @ a_diff)
@@ -118,7 +126,7 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
         problem.solve(solver=solver, verbose=verbose)
 
         if problem.status not in ["optimal", "optimal_inaccurate"]:
-            flag=True
+            flag = True
             break
 
         a_next = a_var.value
@@ -145,16 +153,17 @@ def sca_log_rate_maximization(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, t
     if flag:
         print('Warning: Solver did not converge.')
     return a_current, obj_vals
-is_H_estimated=True
-testnum = 5
+
+
+is_H_estimated = True
+testnum = 10
 sol_sce_dict = {}
-t1=time.time()
+t1 = time.time()
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
     if idx != 2:
         continue
-    sol_list = []
-    obj_list = []
+
     print("=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
     # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
     init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
@@ -169,7 +178,7 @@ for idx, (nUE, nRB) in enumerate(
     BW = env.sce.BW
     # 噪声功率 n0 和每用户的资源约束 N_rb
     n0 = env.get_n0()  # 噪声功率
-    N_rb = nRB//2
+    N_rb = nRB // 2
 
     # 因为集合 A（基站索引）只有一个元素，所以我们只考虑该基站
     # 生成示例参数：功率 P_{b,k,u} 和信道增益 ||H_{b,k,u}||^2（这里直接用正数表示）
@@ -177,27 +186,32 @@ for idx, (nUE, nRB) in enumerate(
     P_constant = env.BSs[0].Transmit_Power()
     P = np.ones((K, U)) * P_constant
 
-    _error_percent_list = np.arange(0.2, 0.6, 0.05) if is_H_estimated else [0]
+    _error_percent_list = np.arange(0, 65, 5)/100 if is_H_estimated else [0]
     for _error_percent in _error_percent_list:
+        sol_list = []
+        obj_list = []
+        _error_percent = np.round(_error_percent, 2)
         print("=" * 10, f"error_percent: {_error_percent}", "=" * 10)
         error_percent = _error_percent
         for test_idx in range(testnum):
             obs, info = env.reset_onlyforbaseline()
-            H_dB = info['CSI']# info['CSI']: unit dBm
-
+            H_dB = info['CSI']  # info['CSI']: unit dBm
+            H_uk = 10 ** (H_dB / 10)
             if is_H_estimated:
-                H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
-                H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
+                # H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error = (1 / H_error_uk).reshape(U, K).transpose()
+                # H_norm_sq = H_error  # H_norm_sq is used by algorithm
+                H_error_uk = env.get_estimated_H(H_uk, _error_percent)  # add 5% estimated error
                 H_error = (1 / H_error_uk).reshape(U, K).transpose()
-                H_norm_sq = H_error  # This H is used by algorithm
+                H_norm_sq = H_error  # H_norm_sq is used by algorithm
             else:
-                H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
                 H = (1 / H_uk).reshape(U, K).transpose()
-                H_norm_sq = H  # This H is used by algorithm
-                
+                H_norm_sq = H  # H_norm_sq is used by algorithm
+
             a_init = np.random.rand(K, U)  # 随机(0,1)
-            a, _ = sca_log_rate_maximization(a_init, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=200, tol=1e-3, verbose=False)
-            a_opt_discret = a
+            a, _ = sca_log_rate_maximization_vec(a_init, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False)
+            a_opt_discret = copy.deepcopy(a)
             for u in range(U):
                 a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)
 
@@ -209,16 +223,17 @@ for idx, (nUE, nRB) in enumerate(
                 {
                     'sol': a_opt_discret,
                     'H': info['CSI'],
+                    'H_error': H_norm_sq,
                     'K': K,
                     'U': U,
                     'obj_discrete': obj_discrete
                 }
             )
             obj_list.append(obj_discrete)
-        cnt_pair=0
+        cnt_pair = 0
         for sol in sol_list:
             cnt_pair += sum(sum(sol['sol']))
-        cnt_pair_avg = cnt_pair/len(sol_list)
+        cnt_pair_avg = cnt_pair / len(sol_list)
         print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
         print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
 
@@ -227,6 +242,6 @@ for idx, (nUE, nRB) in enumerate(
                 f'u{nUE}r{nRB}_err{error_percent}': sol_list
             }
         )
-t2=time.time()
+t2 = time.time()
 
-print(f'all test are done, time: {t2-t1:.2f}s')
+print(f'all test are done, time: {t2 - t1:.2f}s')

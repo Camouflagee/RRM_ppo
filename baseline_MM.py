@@ -53,7 +53,7 @@ for idx, (nUE, nRB) in enumerate(
     P_constant = env.BSs[0].Transmit_Power()
     P = np.ones((K, U)) * P_constant
     print("=" * 10, f"UE{nUE}RB{nRB}场景_Nrb{N_rb}", "=" * 10)
-    _error_percent_list = np.arange(0, 0.7, 0.1) if is_H_estimated else [0]
+    _error_percent_list = np.arange(0, 65, 5)/100 if is_H_estimated else [0]
     for _error_percent in _error_percent_list:
         error_percent = _error_percent
         sol_list = []
@@ -62,14 +62,16 @@ for idx, (nUE, nRB) in enumerate(
             obs, info = env.reset_onlyforbaseline()
             # CSI info pre-process (if adding noise)
             H_dB = info['CSI']
-
+            H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
             if is_H_estimated:
-                H_error_dB = env.get_estimated_H(H_dB, error_percent)  # add 5% estimated error
-                H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error_dB = env.get_estimated_H(H_dB, error_percent)  # add 5% estimated error
+                # H_error_uk = 10 ** (H_error_dB / 10)
+                # H_error = (1 / H_error_uk).reshape(U, K).transpose()
+                # H_sq = H_error
+                H_error_uk = env.get_estimated_H(H_uk, _error_percent)  # add 5% estimated error
                 H_error = (1 / H_error_uk).reshape(U, K).transpose()
-                H_sq = H_error
+                H_sq = H_error  # H_norm_sq is used by algorithm
             else:
-                H_uk = 10 ** (H_dB / 10)  # info['CSI']: unit dBm
                 H = (1 / H_uk).reshape(U, K).transpose()
                 H_sq = H
 
@@ -150,7 +152,7 @@ for idx, (nUE, nRB) in enumerate(
             cnt_pair += sum(sum(sol['sol']))
         cnt_pair_avg = cnt_pair / len(sol_list)
         if is_H_estimated:
-            print(f'error_rate:{error_percent:.1f}')
+            print(f'error_rate:{error_percent:.3f}')
         print(f"{testnum}次实验平均后离散化目标函数值:{np.mean(obj_list):.3f}" )
         print(f"{testnum}次实验平均后问题解pair数量:{cnt_pair_avg:.1f}" )
 
