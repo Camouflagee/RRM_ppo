@@ -1,10 +1,12 @@
 import copy
+import os
 import time
 
 import numpy as np
 import cvxpy as cp
+from networkx.algorithms.bipartite.basic import color
 
-from utils import load_env
+from utils import load_env, get_TimeLogEvalDir
 
 
 def quadratic_projection(x_u, N_rb):
@@ -154,7 +156,7 @@ def discrete_project_per_user(x, N_rb):
     return z
 
 
-def GradProj(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iters=100, tol=1e-4, verbose=False):
+def GradProj(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=None):
     # 梯度上升参数
     K, U = init_a.shape
     H_norm_sq = H_uk
@@ -231,7 +233,7 @@ def GradProj(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iters=100, tol=1
     # 主循环：投影梯度上升
     # -------------------------------
     rate_history = []
-    for iter in range(max_iters):
+    for iter in range(max_iter):
         current_rate = compute_rate(a, P, H_norm_sq, n0)
         # rate_history.append(current_rate * BW // 10 ** 6)
 
@@ -249,10 +251,10 @@ def GradProj(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iters=100, tol=1
                 print(f"Converged at iter {iter}")
             break
         a = a_new
-    return a
+    return a, None
 
 
-def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False):
+def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=None):
     a = init_a
     # 参数设置
     Nk = K  # 资源块数
@@ -302,11 +304,10 @@ def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, ve
                 print(f"收敛于第 {iter} 次迭代")
             break
         a = a_new.copy()
-
+    return a_new, None
 
 def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=cp.MOSEK):
     H = H_uk
-
     a_current = init_a.copy()
     obj_vals = []
     flag = False
@@ -392,7 +393,7 @@ if __name__ == '__main__':
         if idx != 2:
             continue
 
-        print("=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
+        print("\n","=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
         # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
         init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
         # ============================
@@ -414,7 +415,7 @@ if __name__ == '__main__':
         P_constant = env.BSs[0].Transmit_Power()
         P = np.ones((K, U)) * P_constant
 
-        error_percent_list = np.arange(0, 35, 5) / 100 if is_H_estimated else [0]
+        error_percent_list = np.arange(0, 65, 5) / 100 if is_H_estimated else [0]
         # generate the H instance for experiment
         H_list = []
         for test_idx in range(testnum):
@@ -422,8 +423,10 @@ if __name__ == '__main__':
             H_list.append((obs, info))
 
 
-        def run_exp(H_list, _error_percent_list, solver):
+        def run_exp(_H_list, _error_percent_list, algo):
             sol_sce_dict = {}
+            mean_cnt_per_error=[]
+            mean_obj_per_error=[]
             for _error_percent in _error_percent_list:
                 sol_list = []
                 obj_list = []
@@ -446,7 +449,7 @@ if __name__ == '__main__':
 
                     a_init = np.random.rand(K, U)  # 随机(0,1)
 
-                    a, _ = solver(a_init, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False,
+                    a, _ = algo(a_init, H_norm_sq, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False,
                                   solver=cp.MOSEK)
                     a_opt_discret = copy.deepcopy(a)
                     for u in range(U):
@@ -468,13 +471,76 @@ if __name__ == '__main__':
                 cnt_pair_avg = cnt_pair / len(sol_list)
                 print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
                 print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
-
+                mean_obj_per_error.append(np.round(np.mean(obj_list),3))
+                mean_cnt_per_error.append(np.round(cnt_pair_avg,3))
                 sol_sce_dict.update(
                     {
                         f'u{nUE}r{nRB}_err{error_percent}': sol_list
                     }
                 )
-            return sol_sce_dict
+            info = (mean_cnt_per_error, mean_obj_per_error)
+            print(info)
+            return sol_sce_dict, info
+        res={}
+        for idx, (name, algo) in enumerate(zip(['MM','GradProj','SCA'],[MM,GradProj,SCA_vec])):
+            # if idx!=2 :
+            #     continue
+            print("*"*20,f"{name} experiment","*"*20)
+            sol_sce_dict, info = run_exp(H_list, error_percent_list, algo)
+            res.update({'name':info})
     t2 = time.time()
 
     print(f'all test are done, time: {t2 - t1:.2f}s')
+
+    # plot
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib
+
+    matplotlib.use('TkAgg')
+    # 设置支持中文的字体（Windows系统通常使用SimHei，Mac使用PingFang SC）
+    # plt.rcParams['font.sans-serif'] = ['SimHei']  # 或者 ['Microsoft YaHei', 'PingFang SC', 'Heiti TC']
+    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # Windows 常见中文字体
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+
+    # 创建数据
+    x = np.arange(0, 65, 5) / 100  # 横轴数据
+
+    # 五组不同的曲线函数
+    # y1 = np.sin(x)  # SeqPPO side info
+    # y2 = np.cos(x)  # SeqPPO no side info
+    # y3 = np.exp(-x / 5)  # MM
+    # y4 = np.log(x + 1)  # SCA
+    # y5 = [70.80, 70.97, 70.68, 70.69, 70.60, 70.55, 70.56, 70.49, 70.45, 70.41, 70.29, 70.16, 70.10]  # GradProj
+
+    # 创建图形
+    plt.figure(figsize=(10, 6))  # 设置图形大小
+    color=['blue','red','green','purple','orange']
+    dot=['','--',':','-.']
+    for d,clr,algo_name in enumerate(zip(color,dot,['MM','GradProj','SCA'])):
+        y = info[algo_name][1]
+        plt.plot(x, y, label=algo_name, color=clr)
+    log_dir=get_TimeLogEvalDir(model_name='baseline', args='UE12RB30')
+    fig_path=os.path.join(log_dir,'figures.jpg')
+    # 绘制五组曲线
+    # plt.plot(x, y1, label='SeqPPO', color='blue')
+    # plt.plot(x, y2, label='cos(x)', color='red', linestyle='--')
+    # plt.plot(x, y3, label='exp(-x/5)', color='green', linestyle=':')
+    # plt.plot(x, y4, label='log(x+1)', color='purple', linestyle='-.')
+    # plt.plot(x, y5, label='SCA', color='orange')
+
+    # 添加图例
+    plt.legend(loc='upper right')
+
+    # 添加轴标签
+    plt.xlabel('误差率', fontsize=12)
+    plt.ylabel('系统总和速率(Mbps)', fontsize=12)
+
+    # 添加标题
+    plt.title('在信道', fontsize=14)
+
+    # 显示网格
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    # 显示图形
+    plt.show()

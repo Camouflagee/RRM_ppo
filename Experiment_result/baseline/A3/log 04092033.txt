@@ -1,0 +1,55 @@
+
+ ========== UE12RB30场景 ==========
+******************** MM experiment ********************
+========== error_percent: 0.00 ==========
+10次实验平均后离散化目标函数值: 74.26324762212622
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.05 ==========
+10次实验平均后离散化目标函数值: 74.25278722572648
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.10 ==========
+10次实验平均后离散化目标函数值: 74.24399625194752
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.15 ==========
+10次实验平均后离散化目标函数值: 74.16427410442158
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.20 ==========
+10次实验平均后离散化目标函数值: 74.0758808366003
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.25 ==========
+10次实验平均后离散化目标函数值: 73.84125338063753
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.30 ==========
+10次实验平均后离散化目标函数值: 73.77344202906951
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.35 ==========
+10次实验平均后离散化目标函数值: 73.09276559817667
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.40 ==========
+10次实验平均后离散化目标函数值: 72.6943240533894
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.45 ==========
+10次实验平均后离散化目标函数值: 71.54962796465733
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.50 ==========
+10次实验平均后离散化目标函数值: 71.21439334458064
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.55 ==========
+10次实验平均后离散化目标函数值: 70.84489522286039
+10次实验平均后问题解pair数量: 30.0
+========== error_percent: 0.60 ==========
+10次实验平均后离散化目标函数值: 69.93118103169408
+10次实验平均后问题解pair数量: 30.0
+([30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0], [74.26324762212622, 74.25278722572648, 74.24399625194752, 74.16427410442158, 74.0758808366003, 73.84125338063753, 73.77344202906951, 73.09276559817667, 72.6943240533894, 71.54962796465733, 71.21439334458064, 70.84489522286039, 69.93118103169408])
+******************** GradProj experiment ********************
+========== error_percent: 0.00 ==========
+Traceback (most recent call last):
+  File "D:\Program Files\JetBrains\PyCharm 2024.2.4\plugins\python-ce\helpers\pydev\pydevd.py", line 1570, in _exec
+    pydev_imports.execfile(file, globals, locals)  # execute the script
+  File "D:\Program Files\JetBrains\PyCharm 2024.2.4\plugins\python-ce\helpers\pydev\_pydev_imps\_pydev_execfile.py", line 18, in execfile
+    exec(compile(contents+"\n", file, 'exec'), glob, loc)
+  File "D:\PythonProject\RRM_ppo\baseline.py", line 485, in <module>
+    run_exp(H_list, error_percent_list, algo)
+  File "D:\PythonProject\RRM_ppo\baseline.py", line 451, in run_exp
+    a, _ = algo(a_init, H_norm_sq, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False,
+TypeError: GradProj() got an unexpected keyword argument 'max_iter'
