@@ -73,8 +73,7 @@ def discrete_project_per_user(x, N_rb):
     return z
 
 
-import numpy as np
-import cvxpy as cp
+
 
 
 def sca_log_rate_maximization_vec(init_a, H, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False):
