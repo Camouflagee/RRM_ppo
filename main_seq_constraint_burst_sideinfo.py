@@ -126,7 +126,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A3_nosideinfo'
+    _version = 'seqPPOcons_R2A3_sideinfo'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
@@ -134,13 +134,13 @@ if __name__ == '__main__':
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     isBurst = False
     isAdaptive = True
-    use_sideinfo = False
+    use_sideinfo = True
 
     burstprob = 0.8
     for idx, (nUE, nRB, Nrb) in enumerate(zip([5, 10, 12, 15], [10, 20, 30, 40], [5, 10, 15, 20])):
         if idx in [0, 1, 3]:
             continue
-        _error_percent_list = np.arange(30, 60, 5)/100
+        _error_percent_list = np.arange(0, 65, 5)/100
         for _error_percent in _error_percent_list:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
             _episode_length = nUE * Nrb
@@ -155,7 +155,7 @@ if __name__ == '__main__':
             trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
                     _load_model_path, isBurst, burstprob, _error_percent, use_sideinfo)
             print(f'UE{nUE}RB{nRB} training is done')
-
+    system_shutdown(500)
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.

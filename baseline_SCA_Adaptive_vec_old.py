@@ -113,7 +113,7 @@ def sca_log_rate_maximization_vec(init_a, H, P, n0, solver=cp.MOSEK, max_iter=10
             H_k = H[k, :]
             I_k = I_val[k, :]
             # Compute gradient coefficients matrix (U, U)
-            grad_coeff = -np.outer(P_k, H_k) / I_k[:, None]
+            grad_coeff = -np.outer(P_k, H_k) / (I_k[:, None]+1e-15)
             np.fill_diagonal(grad_coeff, 0)
             a_diff = a_var[k, :] - a_current[k, :]
             sum_grad_terms += cp.sum(grad_coeff @ a_diff)
@@ -186,21 +186,16 @@ for idx, (nUE, nRB) in enumerate(
     P_constant = env.BSs[0].Transmit_Power()
     P = np.ones((K, U)) * P_constant
 
-    _error_percent_list = np.arange(0, 65, 5)/100 if is_H_estimated else [0]
-    obj_list = np.zeros(shape=(len(_error_percent_list), testnum))
-    sol_pair_cnt_list = np.zeros(shape=(len(_error_percent_list), testnum))
-    sol_list = [[] for i in _error_percent_list]
-    for test_idx in range(testnum):
-        obs, info = env.reset_onlyforbaseline()
-        H_dB = info['CSI']  # info['CSI']: unit dBm
-        H_uk = 10 ** (H_dB / 10)
-        a_init = np.random.rand(K, U)  # 随机(0,1)
-
-        for error_idx, _error_percent in enumerate(_error_percent_list):
-            # sol_list = []
-            # obj_list = []
-            # print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
-            # error_percent = _error_percent
+    _error_percent_list = np.arange(0, 35, 5)/100 if is_H_estimated else [0]
+    for _error_percent in _error_percent_list:
+        sol_list = []
+        obj_list = []
+        print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
+        error_percent = _error_percent
+        for test_idx in range(testnum):
+            obs, info = env.reset_onlyforbaseline()
+            H_dB = info['CSI']  # info['CSI']: unit dBm
+            H_uk = 10 ** (H_dB / 10)
             if is_H_estimated:
                 # H_error_dB = env.get_estimated_H(H_dB, _error_percent)  # add 5% estimated error
                 # H_error_uk = 10 ** (H_error_dB / 10)
@@ -212,22 +207,20 @@ for idx, (nUE, nRB) in enumerate(
             else:
                 H = (1 / H_uk).reshape(U, K).transpose()
                 H_norm_sq = H  # H_norm_sq is used by algorithm
-            a_0 = copy.deepcopy(a_init)
-            a, _ = sca_log_rate_maximization_vec(a_0, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False)
-            a_opt_discrete = copy.deepcopy(a)
-            for u in range(U):
-                a_opt_discrete[:, u] = discrete_project_per_user(a_opt_discrete[:, u], N_rb)
 
-            obj_discrete = env.cal_sumrate_givenH(a_opt_discrete.reshape(K, U).transpose(), info['CSI'])[0]
-            obj_list[error_idx][test_idx]=obj_discrete
-            sol_pair_cnt_list[error_idx][test_idx] = sum(sum(a_opt_discrete))
+            a_init = np.random.rand(K, U)  # 随机(0,1)
+            a, _ = sca_log_rate_maximization_vec(a_init, H_norm_sq, P, n0, solver=cp.MOSEK, max_iter=100, tol=1e-3, verbose=False)
+            a_opt_discret = copy.deepcopy(a)
+            for u in range(U):
+                a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)
+
+            obj_discrete = env.cal_sumrate_givenH(a_opt_discret.reshape(K, U).transpose(), info['CSI'])[0]
             # print("离散映射后最终目标值：", obj_discrete)
             # print("a_opt_discret:")
             # print(np.array2string(a_opt_discret, separator=', '))
-
-            sol_list[error_idx].append(
+            sol_list.append(
                 {
-                    'sol': a_opt_discrete,
+                    'sol': a_opt_discret,
                     'H': info['CSI'],
                     'H_error': H_norm_sq,
                     'K': K,
@@ -235,28 +228,19 @@ for idx, (nUE, nRB) in enumerate(
                     'obj_discrete': obj_discrete
                 }
             )
-    objprint=np.mean(obj_list, axis=1)
-    paircnt=np.mean(sol_pair_cnt_list, axis=1)
-    for error_idx, _error_percent in enumerate(_error_percent_list):
-        # sol_list = []
-        # obj_list = []
-        print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
-        print(f"{testnum}次实验平均后离散化目标函数值:", objprint[error_idx])
-        print(f"{testnum}次实验平均后问题解pair数量:", paircnt[error_idx])
+            obj_list.append(obj_discrete)
+        cnt_pair = 0
+        for sol in sol_list:
+            cnt_pair += sum(sum(sol['sol']))
+        cnt_pair_avg = cnt_pair / len(sol_list)
+        print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
+        print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
 
-            # obj_list.append(obj_discrete)
-        # cnt_pair = 0
-        # for sol in sol_list:
-        #     cnt_pair += sum(sum(sol['sol']))
-        # cnt_pair_avg = cnt_pair / len(sol_list)
-        # print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
-        # print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
-
-        # sol_sce_dict.update(
-        #     {
-        #         f'u{nUE}r{nRB}_err{error_percent}': sol_list
-        #     }
-        # )
+        sol_sce_dict.update(
+            {
+                f'u{nUE}r{nRB}_err{error_percent}': sol_list
+            }
+        )
 t2 = time.time()
 
 print(f'all test are done, time: {t2 - t1:.2f}s')
