@@ -57,28 +57,39 @@ def save_model_env(log_dir: str, model_name: str, info: str, model_instance, env
 import sys
 
 class Logger:
-    def __init__(self, filename):
-        self.terminal = sys.stdout  # 保存原始的标准输出流
-        self.filename = filename
-        self.prepare_log_file()  # 检查并准备日志文件
-        self.log = open(filename, "a", encoding="utf-8")  # 以追加模式打开文件
+    def __init__(self, filename, mode='a'):
+        """初始化Logger"""
+        # self.filename = filename
+        # 在文件名中添加时间戳, 这里有bug
+        file_dir = os.path.dirname(filename)
+        file_name = os.path.basename(filename)
+        name, ext = os.path.splitext(file_name)
+        timestamp = datetime.now().strftime('%Y-%m-%d %H%M%S')
+        self.filename = os.path.join(file_dir, f"{name}_{timestamp}{ext}")
+        # 确保日志文件所在目录存在
+        os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
+        # 添加时间戳分割线
+        if mode == 'a' and os.path.exists(filename):
+            with open(filename, "a", encoding="utf-8") as file:
+                file.write(f"\n{'='*20} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {'='*20}\n")
+        self.log_file = open(filename, mode, encoding="utf-8", buffering=1)
+    def log(self, message):
+        """记录日志信息"""
+        print(message)
+        self.log_file.write(str(message) + '\n')
+        self.log_file.flush()
 
-    def prepare_log_file(self):
-        """检查日志文件是否存在，存在则添加分割线"""
-        if os.path.exists(self.filename):
-            with open(self.filename, "a", encoding="utf-8") as file:
-                file.write("\n======== 新日志分割线 ========\n")  # 添加分割线
-
-    def write(self, message):
-        self.terminal.write(message)  # 控制台输出
-        self.log.write(message)  # 写入日志文件
-
-    def flush(self):
-        self.terminal.flush()
-        self.log.flush()
     def close(self):
         """关闭日志文件"""
-        self.log.close()
+        if self.log_file is not None:
+            self.log_file.close()
+            self.log_file = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 # # 设置日志文件名
 # log_filename = "output_log.txt"
 #
