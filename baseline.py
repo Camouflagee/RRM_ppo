@@ -262,38 +262,65 @@ def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, ve
     max_iter = max_iter  # 最大迭代次数
     H_sq = H_uk
     for iter in range(max_iter):
-        # 计算当前 gamma 和 A
-        gamma = np.zeros((Nk, Nu))
-        A = np.zeros((Nk, Nu))
-        for k in range(Nk):
-            for u in range(Nu):
-                c_ku = P[k, u] * H_sq[k, u]
-                # 计算干扰项
-                interference = 0
-                for uprime in range(Nu):
-                    if uprime != u:
-                        d_ku_prime = P[k, uprime] * H_sq[k, uprime]
-                        interference += a[k, uprime] * d_ku_prime
-                denominator = interference + n0
-                gamma_ku = (a[k, u] * c_ku) / denominator if denominator != 0 else 0
-                gamma[k, u] = gamma_ku
-                A_ku = a[k, u] * c_ku + interference + n0
-                A[k, u] = A_ku
+        # # 计算当前 gamma 和 A
+        # gamma = np.zeros((Nk, Nu))
+        # A = np.zeros((Nk, Nu))
+        # for k in range(Nk):
+        #     for u in range(Nu):
+        #         c_ku = P[k, u] * H_sq[k, u]
+        #         # 计算干扰项
+        #         interference = 0
+        #         for uprime in range(Nu):
+        #             if uprime != u:
+        #                 d_ku_prime = P[k, uprime] * H_sq[k, uprime]
+        #                 interference += a[k, uprime] * d_ku_prime
+        #         denominator = interference + n0
+        #         gamma_ku = (a[k, u] * c_ku) / denominator if denominator != 0 else 0
+        #         gamma[k, u] = gamma_ku
+        #         A_ku = a[k, u] * c_ku + interference + n0
+        #         A[k, u] = A_ku
+        #
+        # # 计算系数
+        # coeff = np.zeros((Nk, Nu))
+        # for k in range(Nk):
+        #     for u in range(Nu):
+        #         c_ku = P[k, u] * H_sq[k, u]
+        #         term1 = c_ku / A[k, u] if A[k, u] != 0 else 0
+        #         term2 = 0
+        #         for uprime in range(Nu):
+        #             if uprime != u:
+        #                 gamma_ku_prime = gamma[k, uprime]
+        #                 d_ku_prime = P[k, uprime] * H_sq[k, uprime]
+        #                 A_ku_prime = A[k, uprime]
+        #                 term2 += (gamma_ku_prime * d_ku_prime) / A_ku_prime if A_ku_prime != 0 else 0
+        #         coeff[k, u] = term1 - term2
+
+        # vec start
+        C = P * H_sq  # c_ku for all k, u
+        # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
+        # 使用广播技巧
+        interference = (a * C).sum(axis=1, keepdims=True) - a * C
+
+        # 计算gamma
+        denominator = interference + n0
+        gamma = np.where(denominator != 0, (a * C) / denominator, 0)
+
+        # 计算A
+        A = a * C + interference + n0
 
         # 计算系数
-        coeff = np.zeros((Nk, Nu))
-        for k in range(Nk):
-            for u in range(Nu):
-                c_ku = P[k, u] * H_sq[k, u]
-                term1 = c_ku / A[k, u] if A[k, u] != 0 else 0
-                term2 = 0
-                for uprime in range(Nu):
-                    if uprime != u:
-                        gamma_ku_prime = gamma[k, uprime]
-                        d_ku_prime = P[k, uprime] * H_sq[k, uprime]
-                        A_ku_prime = A[k, uprime]
-                        term2 += (gamma_ku_prime * d_ku_prime) / A_ku_prime if A_ku_prime != 0 else 0
-                coeff[k, u] = term1 - term2
+        # term1 = C / A (with 0 where A is 0)
+        term1 = np.where(A != 0, C / A, 0)
+
+        # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
+        # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
+        # 首先计算每个元素的贡献
+        contrib = np.where(A != 0, gamma * C / A, 0)
+        # 然后对每个k，计算所有u'≠u的和
+        term2 = contrib.sum(axis=1, keepdims=True) - contrib
+
+        coeff = term1 - term2
+        # vec end
 
         # 更新a，根据系数决定0或1
         a_new = np.where(coeff > 0, 1, 0)
@@ -371,7 +398,7 @@ def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-
             sum_all = np.sum(sum_matrix, axis=1)
             numerator = np.diag(sum_matrix)
             denominator = sum_all - numerator + n0
-            gamma[k] = numerator / (denominator + 1e-15)
+            gamma[k] = numerator / (denominator)
         obj_val = np.sum(np.log(1 + gamma))
         obj_vals.append(obj_val)
 
@@ -478,7 +505,7 @@ if __name__ == '__main__':
                         f'u{nUE}r{nRB}_err{error_percent}': sol_list
                     }
                 )
-            info = (mean_cnt_per_error, mean_obj_per_error)
+            info = (mean_obj_per_error, mean_cnt_per_error)
             print(info)
             return sol_sce_dict, info
         res={}
@@ -487,7 +514,7 @@ if __name__ == '__main__':
             #     continue
             print("*"*20,f"{name} experiment","*"*20)
             sol_sce_dict, info = run_exp(H_list, error_percent_list, algo)
-            res.update({'name':info})
+            res.update({name : info})
     t2 = time.time()
 
     print(f'all test are done, time: {t2 - t1:.2f}s')
@@ -516,10 +543,10 @@ if __name__ == '__main__':
     # 创建图形
     plt.figure(figsize=(10, 6))  # 设置图形大小
     color=['blue','red','green','purple','orange']
-    dot=['','--',':','-.']
-    for d,clr,algo_name in enumerate(zip(color,dot,['MM','GradProj','SCA'])):
-        y = info[algo_name][1]
-        plt.plot(x, y, label=algo_name, color=clr)
+    dot=['.','--',':','-.']
+    for idx, (algo_name, clr,d) in enumerate(zip(['MM','GradProj','SCA'],color,dot)):
+        y = res[algo_name][1]
+        plt.plot(x, y, label=algo_name, color=clr, linestyle=d)
     log_dir=get_TimeLogEvalDir(model_name='baseline', args='UE12RB30')
     fig_path=os.path.join(log_dir,'figures.jpg')
     # 绘制五组曲线

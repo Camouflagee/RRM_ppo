@@ -16,8 +16,8 @@ def get_model_paths(root_dir):
     error_rates = []
     for root, dirs, files in os.walk(root_dir):
         for file in files:
-            # if file.endswith('.zip') and 'model_saves' in root:
-            if file.endswith('.zip') and 'model_saves' in root and 'best' not in file:
+            if file.endswith('.zip') and 'model_saves' in root:
+                # if file.endswith('.zip') and 'model_saves' in root and 'best' in file:
                 model_paths.append(os.path.join(root, file))
                 # 从路径中提取error rate
                 error_match = re.search(r'error_([0-9.]+)', root)
@@ -34,7 +34,7 @@ def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
     episode_length = nUE * Nrb
     res = []
     num_pair = []
-    test_num = 50
+    test_num = 80
 
     # 加载环境和模型
     unwrapped_env = load_env(f'Experiment_result/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
@@ -45,30 +45,17 @@ def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
     unwrapped_env.use_sideinfo = use_sideinfo
     unwrapped_env.eval_mode = True
     test_env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
-    if not given_obs:
-        # 测试循环
-        for _ in range(test_num):
-            obs, _ = test_env.reset()
-            # obs, _ = test_env.unwrapped.reset_onlyforbaseline(given_obs=given_obs)
-            truncated = False
-            while not truncated:
-                action, _ = model.predict(observation=obs, deterministic=False)
-                obs, reward, terminated, truncated, info = test_env.step(action)
-                if truncated:
-                    res.append(reward)
-                    num_pair.append(sum(obs[nUE * nRB:]))
-    else:
-        # 测试循环
-        for o in range(given_obs):
-            obs, _ = test_env.reset()
-            obs, _ = test_env.unwrapped.reset_onlyforbaseline(given_obs=o,_error_percent=error_rate)
-            truncated = False
-            while not truncated:
-                action, _ = model.predict(observation=obs, deterministic=False)
-                obs, reward, terminated, truncated, info = test_env.step(action)
-                if truncated:
-                    res.append(reward)
-                    num_pair.append(sum(obs[nUE * nRB:]))
+
+    # 测试循环
+    for _ in range(test_num):
+        obs, _ = test_env.reset_onlyforbaseline(given_obs)
+        truncated = False
+        while not truncated:
+            action, _ = model.predict(observation=obs, deterministic=False)
+            obs, reward, terminated, truncated, info = test_env.step(action)
+            if truncated:
+                res.append(reward)
+                num_pair.append(sum(obs[nUE * nRB:]))
 
     return np.mean(res), np.mean(num_pair)
 
@@ -172,33 +159,13 @@ def evaluate_models(logger, model_dir, use_sideinfo):
 
 def main():
     with Logger("Experiment_result/baseline/eval_res.txt") as logger:
-        """评估单个模型的性能"""
-        # nUE = 12
-        # nRB = 30
-        # Nrb = 15
-        # episode_length = nUE * Nrb
-        #
-        # # 加载环境和模型
-        # unwrapped_env = load_env(f'Experiment_result/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
-        # # 设置环境参数
-        # unwrapped_env.error_percent = error_rate
-        # unwrapped_env.use_sideinfo = use_sideinfo
-        # unwrapped_env.eval_mode = True
-        # test_env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
-        # test_num = 80
-        # H_list = []
-        # for test_idx in range(test_num):
-        #     for idx, error_rate in enumerate(error_rates):
-        #         obs, info = env.reset_onlyforbaseline()
-        #         H_list.append((obs, info))
-
         # 测试使用side info的模型
         logger.log("\n====== 测试使用side info的模型 ======")
-        best_res_si, res_si = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_sideinfo_v2", True)
+        best_res_si, res_si = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_sideinfo", True)
 
         # 测试不使用side info的模型
         logger.log("\n====== 测试不使用side info的模型 ======")
-        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_nosideinfo_v2", False)
+        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_nosideinfo", False)
 
         # 输出结果
         logger.log("\n====== 测试结果 ======")

@@ -84,38 +84,66 @@ for idx, (nUE, nRB) in enumerate(
             tol = 1e-4  # 收敛容忍度
 
             for iter in range(max_iter):
+                # ==============================================================================
                 # 计算当前 gamma 和 A
-                gamma = np.zeros((Nk, Nu))
-                A = np.zeros((Nk, Nu))
-                for k in range(Nk):
-                    for u in range(Nu):
-                        c_ku = P[k, u] * H_sq[k, u]
-                        # 计算干扰项
-                        interference = 0
-                        for uprime in range(Nu):
-                            if uprime != u:
-                                d_ku_prime = P[k, uprime] * H_sq[k, uprime]
-                                interference += a[k, uprime] * d_ku_prime
-                        denominator = interference + n0
-                        gamma_ku = (a[k, u] * c_ku) / denominator if denominator != 0 else 0
-                        gamma[k, u] = gamma_ku
-                        A_ku = a[k, u] * c_ku + interference + n0
-                        A[k, u] = A_ku
+                # gamma = np.zeros((Nk, Nu))
+                # A = np.zeros((Nk, Nu))
+                # for k in range(Nk):
+                #     for u in range(Nu):
+                #         c_ku = P[k, u] * H_sq[k, u]
+                #         # 计算干扰项
+                #         interference = 0
+                #         for uprime in range(Nu):
+                #             if uprime != u:
+                #                 d_ku_prime = P[k, uprime] * H_sq[k, uprime]
+                #                 interference += a[k, uprime] * d_ku_prime
+                #         denominator = interference + n0
+                #         gamma_ku = (a[k, u] * c_ku) / denominator if denominator != 0 else 0
+                #         gamma[k, u] = gamma_ku
+                #         A_ku = a[k, u] * c_ku + interference + n0
+                #         A[k, u] = A_ku
+                # 计算系数
+                # coeff = np.zeros((Nk, Nu))
+                # for k in range(Nk):
+                #     for u in range(Nu):
+                #         c_ku = P[k, u] * H_sq[k, u]
+                #         term1 = c_ku / A[k, u] if A[k, u] != 0 else 0
+                #         term2 = 0
+                #         for uprime in range(Nu):
+                #             if uprime != u:
+                #                 gamma_ku_prime = gamma[k, uprime]
+                #                 d_ku_prime = P[k, uprime] * H_sq[k, uprime]
+                #                 A_ku_prime = A[k, uprime]
+                #                 term2 += (gamma_ku_prime * d_ku_prime) / A_ku_prime if A_ku_prime != 0 else 0
+                #         coeff[k, u] = term1 - term2
+                # ==============================================================================
+
+                # =============向量化加速=============
+                C = P * H_sq  # c_ku for all k, u
+                # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
+                # 使用广播技巧
+                interference = (a * C).sum(axis=1, keepdims=True) - a * C
+
+                # 计算gamma
+                denominator = interference + n0
+                gamma = np.where(denominator != 0, (a * C) / denominator, 0)
+
+                # 计算A
+                A = a * C + interference + n0
 
                 # 计算系数
-                coeff = np.zeros((Nk, Nu))
-                for k in range(Nk):
-                    for u in range(Nu):
-                        c_ku = P[k, u] * H_sq[k, u]
-                        term1 = c_ku / A[k, u] if A[k, u] != 0 else 0
-                        term2 = 0
-                        for uprime in range(Nu):
-                            if uprime != u:
-                                gamma_ku_prime = gamma[k, uprime]
-                                d_ku_prime = P[k, uprime] * H_sq[k, uprime]
-                                A_ku_prime = A[k, uprime]
-                                term2 += (gamma_ku_prime * d_ku_prime) / A_ku_prime if A_ku_prime != 0 else 0
-                        coeff[k, u] = term1 - term2
+                # term1 = C / A (with 0 where A is 0)
+                term1 = np.where(A != 0, C / A, 0)
+
+                # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
+                # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
+                # 首先计算每个元素的贡献
+                contrib = np.where(A != 0, gamma * C / A, 0)
+                # 然后对每个k，计算所有u'≠u的和
+                term2 = contrib.sum(axis=1, keepdims=True) - contrib
+
+                coeff = term1 - term2
+                # 向量化加速代码结束
 
                 # 更新a，根据系数决定0或1
                 a_new = np.where(coeff > 0, 1, 0)

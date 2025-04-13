@@ -1,0 +1,48 @@
+!!python/object/new:utils.DotDic
+dictitems:
+  batch_size: 64
+  clip_range: 0.2
+  clip_range_vf: null
+  ent_coef: 0.01
+  gae_lambda: 0.95
+  gamma: 0.99
+  learning_rate: 0.0003
+  max_grad_norm: 0.5
+  n_epochs: 10
+  n_steps: 2048
+  normalize_advantage: true
+  policy_kwargs:
+    const_args: !!python/object/new:utils.DotDic
+      dictitems:
+        BW: 180000
+        N0: -174
+        Nb: 10
+        Nrb: 15
+        QoS_thr: 5
+        bsloclist:
+        - - 250
+          - 500
+        - - 750
+          - 500
+        burst_prob: null
+        fc: 6
+        nChannel: 20
+        nFBS: 0
+        nMBS: 0
+        nPBS: 1
+        nRBs: 30
+        nUEs: 12
+        rFBS: null
+        rMBS: null
+        rPBS: 400
+        txpowerFBSdBm: null
+        txpowerMBSdBm: null
+        txpowerPBSdBm: 50
+        x_max: 1000
+        y_max: 1000
+  sde_sample_freq: -1
+  seed: null
+  stats_window_size: 100
+  target_kl: null
+  use_sde: false
+  vf_coef: 0.5

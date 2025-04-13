@@ -34,15 +34,14 @@ plt.xticks(x)
 plt.legend(loc='upper right')
 
 # 添加轴标签
-plt.xlabel('估计误差百分比', fontsize=12)
-plt.ylabel('系统总和速率(Mbps)', fontsize=12)
+plt.xlabel('X轴名称', fontsize=12)
+plt.ylabel('Y轴名称', fontsize=12)
 
 # 添加标题
-plt.title('在信道有估计误差时的性能表现', fontsize=14)
+plt.title('五组曲线对比图', fontsize=14)
 
 # 显示网格
 plt.grid(True, linestyle='--', alpha=0.5)
 
 # 显示图形
 plt.show()
-

@@ -1,4 +1,10 @@
+在self.cal_summrate_givenH中: interference_m = interference_sum_m - signal_power_set + Noise (没有加1e-10)
 
+
+import sys; print('Python %s on %s' % (sys.version, sys.platform))
+D:\ProgramData\miniconda3\envs\paper2\python.exe -X pycache_prefix=C:\Users\84111\AppData\Local\JetBrains\PyCharm2024.2\cpython-cache "D:/Program Files/JetBrains/PyCharm 2024.2.4/plugins/python-ce/helpers/pydev/pydevd.py" --multiprocess --qt-support=auto --client 127.0.0.1 --port 5598 --file D:\PythonProject\RRM_ppo\baseline.py
+Console output is saving to: D:\PythonProject\RRM_ppo\Experiment_result\baseline\A3\log.txt
+已连接到 pydev 调试器(内部版本号 242.23726.102)
  ========== UE12RB30场景 ==========
 ******************** MM experiment ********************
 ========== error_percent: 0.00 ==========
@@ -124,11 +130,3 @@
 10次实验平均后问题解pair数量: 30.0
 ([111.12, 111.167, 110.554, 111.27, 110.382, 110.824, 110.824, 110.07, 108.905, 108.562, 108.316, 107.841, 107.666], [30.1, 30.2, 30.2, 30.0, 30.3, 30.0, 30.0, 30.1, 30.2, 30.0, 30.1, 30.0, 30.0])
 all test are done, time: 784.60s
-Traceback (most recent call last):
-  File "D:\Program Files\JetBrains\PyCharm 2024.2.4\plugins\python-ce\helpers\pydev\pydevd.py", line 1570, in _exec
-    pydev_imports.execfile(file, globals, locals)  # execute the script
-  File "D:\Program Files\JetBrains\PyCharm 2024.2.4\plugins\python-ce\helpers\pydev\_pydev_imps\_pydev_execfile.py", line 18, in execfile
-    exec(compile(contents+"\n", file, 'exec'), glob, loc)
-  File "D:\PythonProject\RRM_ppo\baseline.py", line 520, in <module>
-    for d,clr,algo_name in enumerate(zip(color,dot,['MM','GradProj','SCA'])):
-ValueError: not enough values to unpack (expected 3, got 2)
