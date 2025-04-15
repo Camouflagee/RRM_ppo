@@ -110,7 +110,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
                                        render=False, verbose=1,
                                        # callback_after_eval=stop_train_callback
                                        )
-    model.learn(total_timesteps=400000, progress_bar=True, log_interval=10,
+    model.learn(total_timesteps=200000, progress_bar=True, log_interval=10,
                 callback=eval_callback,
                 reset_num_timesteps=False)
     # train the model
@@ -148,7 +148,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A3_sideinfo_tune_epl'
+    _version = 'seqPPOcons_R2A3_tune_sideinfo_epl'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
