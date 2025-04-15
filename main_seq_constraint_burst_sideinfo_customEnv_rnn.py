@@ -5,18 +5,19 @@ from gymnasium.wrappers import TimeLimit
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 
-from environmentSB3 import SequenceDecisionAdaptiveEnvironmentSB3
+from environmentSB3 import MMSequenceDecisionAdaptiveEnvironmentSB3, ReverseSequenceDecisionAdaptiveEnvironmentSB3, \
+    SequenceDecisionAdaptiveEnvironmentSB3
 
 from module.mycallbacks import SeqPPOEvalCallback
-from module.sequencepolicy import SequenceActorCriticPolicy
-from module.sequence_ppo import SequencePPO
+from module.sequencepolicy import SequenceActorCriticPolicy, RecurrentSequenceActorCriticPolicy
+from module.sequence_ppo import SequencePPO, RecurrentSequencePPO
 from utils import *
 import warnings
 import shutil
 warnings.filterwarnings("ignore")
 
 
-def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args, tr_args, load_env_path,
+def trainer(total_timesteps, _version, envName, expNo, episode_length, env_class, policy_class, net_class, env_args, tr_args, load_env_path,
             load_model_path, isBurst, burstprob, error_percent, usesideinfo):
     time_log_folder, time_eval_log_dir = get_TimeLogEvalDir(
         log_root='Experiment_result',
@@ -25,12 +26,12 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
         info_str=f'')
     if load_env_path:
         unwrapped_env = load_env(load_env_path)
-        if not isinstance(unwrapped_env, SequenceDecisionAdaptiveEnvironmentSB3):
-            init_env = SequenceDecisionAdaptiveEnvironmentSB3(env_args)
+        if not isinstance(unwrapped_env, env_class):
+            init_env = env_class(env_args)
             init_env.__setstate__(unwrapped_env.__getstate__())
             unwrapped_env = init_env
     else:
-        unwrapped_env = SequenceDecisionAdaptiveEnvironmentSB3(env_args)
+        unwrapped_env = env_class(env_args)
     if isBurst and burstprob:
         unwrapped_env.isBurstScenario = isBurst
         unwrapped_env.burst_prob = burstprob
@@ -44,8 +45,8 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
     collect_rollout_steps = 2048 if episode_length * 5 <= 2048 else episode_length * 5
     env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
     if load_model_path:
-        tr_args['policy'] = SequenceActorCriticPolicy
-        model = SequencePPO.load(
+        tr_args['policy'] = net_class
+        model = policy_class.load(
             path=load_model_path,
             env=env,
             **tr_args,
@@ -53,7 +54,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
     else:
         tr_args['policy_kwargs'] = {'const_args': env_args}
         tr_args.n_steps = collect_rollout_steps
-        model = SequencePPO(policy=SequenceActorCriticPolicy, env=env, verbose=1, device='cpu', **tr_args, )
+        model = policy_class(policy=net_class, env=env, verbose=1, device='cpu', **tr_args, )
 
     # ----------------------manually test the model-------------------------
     # test_env = TimeLimit(unwrapped_env, max_episode_steps=100)
@@ -110,49 +111,27 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
                                        render=False, verbose=1,
                                        # callback_after_eval=stop_train_callback
                                        )
-    model.learn(total_timesteps=400000, progress_bar=True, log_interval=10,
-                callback=eval_callback,
-                reset_num_timesteps=False)
     # train the model
-    # explore
-    from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
-    model.clip_rang=get_schedule_fn(0.3)
-    model.learning_rate=3e-3
-    model.ent_coef=0.05
     model.learn(total_timesteps=total_timesteps, progress_bar=True, log_interval=10,
                 callback=eval_callback,
                 reset_num_timesteps=False)
 
     # save model
-    save_model_env(time_log_folder, _version, 'explore', model, None)
-    # exploitation
-    from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
-    model.clip_rang=get_schedule_fn(0.1)
-    model.learning_rate=3e-4
-    model.ent_coef=0
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, log_interval=10,
-                callback=eval_callback,
-                reset_num_timesteps=False)
-    # save model
-    save_model_env(time_log_folder, _version, 'exploitation', model, None)
-
+    save_model_env(time_log_folder, _version, '', model, None)
     print('training is done')
 
     # todo 模型输出的pair最大长度是否可以让模型自己决定?
     # print('system will be shut down in 300s')
     # system_shutdown(300)
-# from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
-# self.clip_rang=get_schedule_fn(0.3)
-# self.learning_rate=3e-4
-# self.ent_coef=0.01
+
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A3_sideinfo_tune_epl'
+    _version = 'seqPPOcons_R2A3_tune_RNN'
     # load or create environment/model
-    with open('config/config_environment_setting.yaml', 'r') as file:
+    with open('config/MM/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    with open('config/config_training_parameters.yaml', 'r') as file:
+    with open('config/MM/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     isBurst = False
     isAdaptive = True
@@ -165,20 +144,21 @@ if __name__ == '__main__':
         _error_percent_list = np.arange(0, 55, 5)/100
         for _error_percent in _error_percent_list[:1]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
-            _episode_length = 120
+            _episode_length = nUE * Nrb
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
-            # _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters
-            _expNo = f'E1_Nrb{_env_args.Nrb}_epl_{_episode_length}'  # same expNo has same initialized model parameters
+            _expNo = f'E1_Nrb{_env_args.Nrb}_epl_{_episode_length}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
             _env_args.nRBs = nRB
             _total_timesteps = 800000
             _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
             _load_model_path = None
-            trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, _env_args, _tr_args, _load_env_path,
+            trainer(_total_timesteps, _version, _envName, _expNo, _episode_length,
+                    SequenceDecisionAdaptiveEnvironmentSB3, RecurrentSequencePPO, RecurrentSequenceActorCriticPolicy,
+                    _env_args, _tr_args, _load_env_path,
                     _load_model_path, isBurst, burstprob, _error_percent, use_sideinfo)
             print(f'UE{nUE}RB{nRB} training is done')
-    system_shutdown(60)
+    system_shutdown(500)
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策
 # 1. episode_length长时, 会导致mask掉大部分动作, 导致模型决策出问题.
@@ -187,16 +167,21 @@ if __name__ == '__main__':
 # reward model 2 = obj_t - obj_(t-1)
 # reward model 1 = obj_t
 
-# 探索阶段代码
-# from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
-# self.clip_rang=get_schedule_fn(0.3)
-# self.learning_rate=3e-4
-# self.ent_coef=0.05
-
-
-# model.learn(total_timesteps=300000, progress_bar=True, log_interval=10,
-#             callback=eval_callback,
-#             reset_num_timesteps=False)
-#
-# # save model
-# save_model_env(time_log_folder, _version, '', model, None)
+# default
+# learning_rate : 3.0e-4
+# n_steps : 2048
+# batch_size : 64
+# n_epochs : 10
+# gamma : 0.99
+# gae_lambda : 0.95
+# clip_range : 0.2
+# clip_range_vf : ~
+# normalize_advantage : True
+# ent_coef : 0.1
+# vf_coef : 0.5
+# max_grad_norm : 0.5
+# use_sde : False
+# sde_sample_freq : -1
+# target_kl : ~
+# stats_window_size : 100
+# seed : ~

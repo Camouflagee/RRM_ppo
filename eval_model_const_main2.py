@@ -194,11 +194,11 @@ def main():
 
         # 测试使用side info的模型
         logger.log("\n====== 测试使用side info的模型 ======")
-        best_res_si, res_si = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_tune", True)
+        best_res_si, res_si = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_sideinfo", True)
 
         # 测试不使用side info的模型
         logger.log("\n====== 测试不使用side info的模型 ======")
-        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_tune_nosideinfo", False)
+        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_nosideinfo", False)
 
         # 输出结果
         logger.log("\n====== 测试结果 ======")

@@ -4,6 +4,7 @@ from typing import Any, ClassVar, Dict, Optional, Type, TypeVar, Union
 import numpy as np
 import torch as th
 from gymnasium import spaces
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import VecEnv
@@ -250,3 +251,7 @@ class SequencePPO(PPO):
         callback.on_rollout_end()
 
         return True
+
+class RecurrentSequencePPO(RecurrentPPO):
+    def __init__(self, *args, **kwargs):
+        super(RecurrentSequencePPO, self).__init__(*args, **kwargs)
