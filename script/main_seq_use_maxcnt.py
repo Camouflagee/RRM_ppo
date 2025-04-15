@@ -1,16 +1,14 @@
 # training script of SequencePPO
-import copy
-import gymnasium as gym
 import yaml
 from gymnasium.wrappers import TimeLimit
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 
-from environmentSB3 import EnvironmentSB3, SequenceDecisionEnvironmentSB3
+from environmentSB3 import SequenceDecisionEnvironmentSB3
 from stable_baselines3 import PPO
 
-from policy.sequence_ppo import SequencePPO
+from module.sequence_ppo import SequencePPO
 from utils import *
 # this main code is designed for environment with property, maxcnt.
 # maxcnt indicates the number of the match pair of UE and RB
@@ -41,7 +39,7 @@ env = TimeLimit(env, max_episode_steps=episode_length * env.maxcnt)
 if _load_model:
     model = PPO.load(
         path=
-        'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250106time171834\model_saves\eval_best_model\\best_model.zip',
+        '/Experiment_result/old/PPO\BS1UE20\E1\date20250106time171834\model_saves\eval_best_model\\best_model.zip',
         env=env,
         **tr_args,
     )

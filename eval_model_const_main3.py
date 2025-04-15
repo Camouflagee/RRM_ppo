@@ -1,6 +1,6 @@
 import numpy as np
 from gymnasium.wrappers import TimeLimit
-from policy.sequence_ppo import SequencePPO
+from module.sequence_ppo import SequencePPO
 from utils import load_env
 import os
 import re
@@ -37,7 +37,7 @@ def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
     test_num = 80
 
     # 加载环境和模型
-    unwrapped_env = load_env(f'Experiment_result/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
+    unwrapped_env = load_env(f'Experiment_result/old/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
     model = SequencePPO.load(model_path)
 
     # 设置环境参数
@@ -161,11 +161,11 @@ def main():
     with Logger("Experiment_result/baseline/eval_res.txt") as logger:
         # 测试使用side info的模型
         logger.log("\n====== 测试使用side info的模型 ======")
-        best_res_si, res_si = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_sideinfo", True)
+        best_res_si, res_si = evaluate_models(logger, "Experiment_result/old/seqPPOcons_R2A3_sideinfo", True)
 
         # 测试不使用side info的模型
         logger.log("\n====== 测试不使用side info的模型 ======")
-        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_nosideinfo", False)
+        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/old/seqPPOcons_R2A3_nosideinfo", False)
 
         # 输出结果
         logger.log("\n====== 测试结果 ======")

@@ -1,6 +1,6 @@
 import numpy as np
 from gymnasium.wrappers import TimeLimit
-from policy.sequence_ppo import SequencePPO
+from module.sequence_ppo import SequencePPO
 from utils import load_env
 
 

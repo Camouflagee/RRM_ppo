@@ -12,7 +12,7 @@ from stable_baselines3 import PPO
 
 from module.mycallbacks import SeqPPOEvalCallback
 from module.sequencepolicy import SequenceActorCriticPolicy
-from policy.sequence_ppo import SequencePPO
+from module.sequence_ppo import SequencePPO
 from utils import *
 import warnings
 

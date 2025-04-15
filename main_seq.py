@@ -1,17 +1,13 @@
 # training script of SequencePPO
-import copy
-import gymnasium as gym
 import yaml
 from gymnasium.wrappers import TimeLimit
-from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 
-from environmentSB3 import EnvironmentSB3, SequenceDecisionEnvironmentSB3
-from stable_baselines3 import PPO
+from environmentSB3 import SequenceDecisionEnvironmentSB3
 
 from module.mycallbacks import SeqPPOEvalCallback
-from policy.sequence_ppo import SequencePPO
+from module.sequence_ppo import SequencePPO
 from utils import *
 import warnings
 
@@ -48,7 +44,7 @@ env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
 if _load_model:
     model = SequencePPO.load(
         path=
-        'Experiment_result/seqPPO/BS1UE20/E2/date20250207time160611/model_saves/seqPPO_NumSteps_251904.zip',
+        'Experiment_result/old/seqPPO/BS1UE20/E2/date20250207time160611/model_saves/seqPPO_NumSteps_251904.zip',
         env=env,
         **tr_args,
     )

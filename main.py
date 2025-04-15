@@ -36,7 +36,7 @@ env = TimeLimit(env, max_episode_steps=episode_length)
 if _load_model:
     model = PPO.load(
         path=
-'D:\pythonProject\RRM_ppo\Experiment_result\PPO\BS1UE20\E1\date20250107time131838\model_saves\eval_best_model\\best_model.zip',
+        '/Experiment_result/old/PPO\BS1UE20\E1\date20250107time131838\model_saves\eval_best_model\\best_model.zip',
 
         env=env,
         **tr_args,
