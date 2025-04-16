@@ -51,7 +51,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
             **tr_args,
         )
     else:
-        tr_args['policy_kwargs'] = {'const_args': env_args}
+        tr_args['policy_kwargs'] = {'const_args': env_args, 'net_arch': dict(pi=[128, 64], vf=[128, 128])}
         tr_args.n_steps = collect_rollout_steps
         model = SequencePPO(policy=SequenceActorCriticPolicy, env=env, verbose=1, device='cpu', **tr_args, )
 
@@ -110,16 +110,13 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
                                        render=False, verbose=1,
                                        # callback_after_eval=stop_train_callback
                                        )
-    model.learn(total_timesteps=200000, progress_bar=True, log_interval=10,
-                callback=eval_callback,
-                reset_num_timesteps=False)
-    # train the model
+
     # explore
-    from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
+    from stable_baselines3.common.utils import get_schedule_fn
     model.clip_rang=get_schedule_fn(0.3)
     model.learning_rate=3e-3
-    model.ent_coef=0.05
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, log_interval=10,
+    model.ent_coef=0.01
+    model.learn(total_timesteps=600000, progress_bar=True, log_interval=10,
                 callback=eval_callback,
                 reset_num_timesteps=False)
 
@@ -128,9 +125,9 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
     # exploitation
     from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
     model.clip_rang=get_schedule_fn(0.1)
-    model.learning_rate=3e-4
+    model.learning_rate=3e-5
     model.ent_coef=0
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, log_interval=10,
+    model.learn(total_timesteps=600000, progress_bar=True, log_interval=10,
                 callback=eval_callback,
                 reset_num_timesteps=False)
     # save model
@@ -148,7 +145,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_args,
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_R2A3_tune_sideinfo_epl'
+    _version = 'seqPPOcons_R2A3_ztune_sideinfo'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
@@ -165,11 +162,11 @@ if __name__ == '__main__':
         _error_percent_list = np.arange(0, 55, 5)/100
         for _error_percent in _error_percent_list[:1]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
-            _episode_length = 120
+            _episode_length = 180
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
             # _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters
-            _expNo = f'E1_Nrb{_env_args.Nrb}_epl_{_episode_length}'  # same expNo has same initialized model parameters
+            _expNo = f'E1_Nrb{_env_args.Nrb}_epl_{_episode_length}_err_{_error_percent:.2f}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
             _env_args.nRBs = nRB
             _total_timesteps = 800000
