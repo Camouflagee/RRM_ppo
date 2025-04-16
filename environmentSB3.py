@@ -781,16 +781,20 @@ class MMSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         # self.history_channel_information don't change
         self.cnt += 1
         # # reward model2: r = obj_t- obj_t-1
-        reward = total_rate - self.last_total_rate
-        self.last_total_rate = total_rate
+        # reward = total_rate - self.last_total_rate
+        # self.last_total_rate = total_rate
+        # reward model3:
+        mm_coeff=self.encode_obs_MM(self.history_channel_information_error, self.history_action)
+        reward = (mm_coeff/mm_coeff.max())[action]
 
         # reward model1: r = obj_t
         # reward = total_rate
         if self.eval_mode:
             reward = total_rate
 
+
         new_obs = np.concatenate(
-            [self.encode_obs_MM(self.history_channel_information_error, self.history_action), self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
+            [self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
         terminated, truncated, info = False, False, {}
 
         return new_obs, reward, terminated, truncated, info

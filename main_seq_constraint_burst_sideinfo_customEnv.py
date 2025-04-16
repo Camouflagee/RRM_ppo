@@ -152,7 +152,7 @@ if __name__ == '__main__':
             _total_timesteps = 800000
             _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
             _load_model_path = None
-            trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, ReverseSequenceDecisionAdaptiveEnvironmentSB3, _env_args, _tr_args, _load_env_path,
+            trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, MMSequenceDecisionAdaptiveEnvironmentSB3, _env_args, _tr_args, _load_env_path,
                     _load_model_path, isBurst, burstprob, _error_percent, use_sideinfo)
             print(f'UE{nUE}RB{nRB} training is done')
     system_shutdown(500)
