@@ -10,6 +10,8 @@ with open('config/config_environment_setting.yaml', 'r') as file:
 sce = env_args
 for idx, (nUE, nRB) in enumerate(
         zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
+    if idx != 2:
+        continue
     init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
     N_rb=nRB//2
     # ============================

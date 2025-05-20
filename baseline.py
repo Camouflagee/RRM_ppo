@@ -333,6 +333,52 @@ def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, ve
         a = a_new.copy()
     return a_new, None
 
+
+def MM_seq(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=None):
+    a = np.zeros_like(init_a)
+    # 参数设置
+    Nk = K  # 资源块数
+    Nu = U  # 用户数
+    max_iter = max_iter  # 最大迭代次数
+    H_sq = H_uk
+    for iter in range(max_iter):
+
+        # vec start
+        C = P * H_sq  # c_ku for all k, u
+        # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
+        # 使用广播技巧
+        interference = (a * C).sum(axis=1, keepdims=True) - a * C
+
+        # 计算gamma
+        denominator = interference + n0
+        gamma = np.where(denominator != 0, (a * C) / denominator, 0)
+
+        # 计算A
+        A = a * C + interference + n0
+
+        term1 = np.where(A != 0, C / A, 0)
+
+        contrib = np.where(A != 0, gamma * C / A, 0)
+
+        term2 = contrib.sum(axis=1, keepdims=True) - contrib
+
+        coeff = term1 - term2
+
+        argmaxidx=np.argmax(coeff)
+        ashap = a.shape
+        a_new = a.copy().reshape(-1)
+        a_new[argmaxidx] = 1
+        a_new = a_new.reshape(ashap)
+
+        # 检查收敛
+        if np.max(np.abs(a_new - a)) < tol:
+            if verbose:
+                print(f"收敛于第 {iter} 次迭代")
+            break
+        a = a_new.copy()
+    return a_new, None
+
+
 def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=cp.MOSEK):
     H = H_uk
     a_current = init_a.copy()
@@ -420,7 +466,7 @@ if __name__ == '__main__':
         if idx != 2:
             continue
 
-        print("\n","=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
+        print("\n", "=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
         # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
         init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
         # ============================
@@ -452,8 +498,8 @@ if __name__ == '__main__':
 
         def run_exp(_H_list, _error_percent_list, algo):
             sol_sce_dict = {}
-            mean_cnt_per_error=[]
-            mean_obj_per_error=[]
+            mean_cnt_per_error = []
+            mean_obj_per_error = []
             for _error_percent in _error_percent_list:
                 sol_list = []
                 obj_list = []
@@ -476,8 +522,9 @@ if __name__ == '__main__':
 
                     a_init = np.random.rand(K, U)  # 随机(0,1)
 
-                    a, _ = algo(a_init, H_norm_sq, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False,
-                                  solver=cp.MOSEK)
+                    a, _ = algo(a_init, H_norm_sq, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4,
+                                verbose=False,
+                                solver=cp.MOSEK)
                     a_opt_discret = copy.deepcopy(a)
                     for u in range(U):
                         a_opt_discret[:, u] = discrete_project_per_user(a_opt_discret[:, u], N_rb)
@@ -498,8 +545,8 @@ if __name__ == '__main__':
                 cnt_pair_avg = cnt_pair / len(sol_list)
                 print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
                 print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
-                mean_obj_per_error.append(np.round(np.mean(obj_list),3))
-                mean_cnt_per_error.append(np.round(cnt_pair_avg,3))
+                mean_obj_per_error.append(np.round(np.mean(obj_list), 3))
+                mean_cnt_per_error.append(np.round(cnt_pair_avg, 3))
                 sol_sce_dict.update(
                     {
                         f'u{nUE}r{nRB}_err{error_percent}': sol_list
@@ -508,13 +555,15 @@ if __name__ == '__main__':
             info = (mean_obj_per_error, mean_cnt_per_error)
             print(info)
             return sol_sce_dict, info
-        res={}
-        for idx, (name, algo) in enumerate(zip(['MM','GradProj','SCA'],[MM,GradProj,SCA_vec])):
+
+
+        res = {}
+        for idx, (name, algo) in enumerate(zip(['MM_seq', 'MM', 'GradProj', 'SCA'], [MM_seq, MM, GradProj, SCA_vec])):
             # if idx!=2 :
             #     continue
-            print("*"*20,f"{name} experiment","*"*20)
+            print("*" * 20, f"{name} experiment", "*" * 20)
             sol_sce_dict, info = run_exp(H_list, error_percent_list, algo)
-            res.update({name : info})
+            res.update({name: info})
     t2 = time.time()
 
     print(f'all test are done, time: {t2 - t1:.2f}s')
@@ -542,13 +591,13 @@ if __name__ == '__main__':
 
     # 创建图形
     plt.figure(figsize=(10, 6))  # 设置图形大小
-    color=['blue','red','green','purple','orange']
-    dot=['.','--',':','-.']
-    for idx, (algo_name, clr,d) in enumerate(zip(['MM','GradProj','SCA'],color,dot)):
+    color = ['blue', 'red', 'green', 'purple', 'orange']
+    dot = ['.', '--', ':', '-.']
+    for idx, (algo_name, clr, d) in enumerate(zip(['MM_seq','MM', 'GradProj', 'SCA'], color, dot)):
         y = res[algo_name][1]
         plt.plot(x, y, label=algo_name, color=clr, linestyle=d)
-    log_dir=get_TimeLogEvalDir(model_name='baseline', args='UE12RB30')
-    fig_path=os.path.join(log_dir,'figures.jpg')
+    log_dir = get_TimeLogEvalDir(model_name='baseline', args='UE12RB30')
+    fig_path = os.path.join(log_dir, 'figures.jpg')
     # 绘制五组曲线
     # plt.plot(x, y1, label='SeqPPO', color='blue')
     # plt.plot(x, y2, label='cos(x)', color='red', linestyle='--')
