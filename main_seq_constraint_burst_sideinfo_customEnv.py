@@ -141,9 +141,9 @@ if __name__ == '__main__':
         if idx in [0, 1, 3]:
             continue
         _error_percent_list = np.arange(0, 55, 5)/100
-        for _error_percent in _error_percent_list:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
+        for _error_percent in _error_percent_list[:1]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
-            _episode_length = nUE * Nrb
+            _episode_length = 40
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
             _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters

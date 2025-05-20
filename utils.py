@@ -1,6 +1,8 @@
 import os, copy, pickle
 from datetime import datetime
 
+import numpy as np
+
 from environment import Environment
 
 
@@ -152,3 +154,9 @@ def system_shutdown(time_to_be_shutdown: int = 240):
     button_cancel.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
     # 运行窗口的主循环
     window.mainloop()
+def min_max_normalize(arr, axis=None):
+    min_val = np.min(arr, axis=axis, keepdims=True)  # 保持维度一致
+    max_val = np.max(arr, axis=axis, keepdims=True)
+    range_val = max_val - min_val
+    range_val[range_val == 0] = 1  # 避免除以0（全等值设为0）
+    return (arr - min_val) / range_val

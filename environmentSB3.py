@@ -5,6 +5,7 @@ import numpy as np
 import torch as th
 
 from environment import Environment
+from utils import min_max_normalize
 
 
 class EnvironmentSB3(Environment):
@@ -184,6 +185,8 @@ class SequenceDecisionEnvironmentSB3(Environment):
         :param action: solution a_{k,u}
         :return:
         """
+        H_sq = H_sq.reshape(self.nUE, self.nRB).transpose()
+        action = action.reshape(self.nUE, self.nRB).transpose()
         n0 = self.get_n0()
         a = action
         C = H_sq  # c_ku for all k, u
@@ -417,40 +420,6 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                                                     dtype=self.dtype)
         self.history_channel_information_error = None
 
-    def encode_obs_MM(self, H_sq, action):
-        """
-        :param H_sq: channel
-        :param action: solution a_{k,u}
-        :return:
-        """
-        n0 = self.get_n0()
-        a = action
-        C = H_sq  # c_ku for all k, u
-        # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
-        # 使用广播技巧
-        interference = (a * C).sum(axis=1, keepdims=True) - a * C
-
-        # 计算gamma
-        denominator = interference + n0
-        gamma = np.where(denominator != 0, (a * C) / denominator, 0)
-
-        # 计算A
-        A = a * C + interference + n0
-
-        # 计算系数
-        # term1 = C / A (with 0 where A is 0)
-        term1 = np.where(A != 0, C / A, 0)
-
-        # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
-        # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
-        # 首先计算每个元素的贡献
-        contrib = np.where(A != 0, gamma * C / A, 0)
-        # 然后对每个k，计算所有u'≠u的和
-        term2 = contrib.sum(axis=1, keepdims=True) - contrib
-
-        coeff = term1 - term2
-        return coeff
-
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
         self.history_action[action] = 1
@@ -475,7 +444,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
             reward = total_rate
 
 
-        new_obs = np.concatenate([self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
+        new_obs = np.concatenate([self.history_channel_information_error_norm, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
         terminated, truncated, info = False, False, {}
 
         return new_obs, reward, terminated, truncated, info
@@ -495,6 +464,8 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         H_uk= 10 ** (H_dB/10)
         H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
         H_error_dB = 10*np.log10(H_error_uk)
+        H_error_dB_norm = min_max_normalize(H_error_dB)
+        self.history_channel_information_error_norm = H_error_dB_norm
         self.history_channel_information_error = H_error_dB # dBm
         self.history_channel_information = H_dB  # dBm
         self.episode_cnt += 1
@@ -502,7 +473,7 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
             self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
         channel_damage_info = np.array([0])
         empty_action = np.zeros_like(H_dB)
-        obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
+        obs = np.concatenate([H_error_dB_norm, empty_action, channel_damage_info], axis=-1)
         self.history_action = empty_action
         observation, info = np.array(obs), {}
         self.cnt = 0
@@ -545,199 +516,20 @@ class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                                             'CSI_error': H_error_dB,}
         return observation, info
 
-    class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.history_channel_information_error = None
-            self.error_percent = None
-            self.use_sideinfo = None
-
-        def set_obs_act_space(self):
-            # set obs and action space based on env's info
-            # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
-            # for b_index, b in enumerate(self.BSs):
-            #     for ue_index, ue in enumerate(self.UEs):
-            #         Loc_diff = b.Get_Location() - ue.Get_Location()
-            #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
-            self.nUE = self.sce.nUEs
-            self.nRB = self.sce.nRBs
-            # action: one UE*RB pair
-            self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB,
-                                                             start=0)  # +1 : add side information
-            # obs: [Channel state information + action dimension (last decision pair)]
-            self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2 + 1,),
-                                                        dtype=self.dtype)
-            self.history_channel_information_error = None
-
-        def encode_obs_MM(self, H_sq, action):
-            """
-            :param H_sq: channel
-            :param action: solution a_{k,u}
-            :return:
-            """
-            n0 = self.get_n0()
-            a = action
-            C = H_sq  # c_ku for all k, u
-            # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
-            # 使用广播技巧
-            interference = (a * C).sum(axis=1, keepdims=True) - a * C
-
-            # 计算gamma
-            denominator = interference + n0
-            gamma = np.where(denominator != 0, (a * C) / denominator, 0)
-
-            # 计算A
-            A = a * C + interference + n0
-
-            # 计算系数
-            # term1 = C / A (with 0 where A is 0)
-            term1 = np.where(A != 0, C / A, 0)
-
-            # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
-            # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
-            # 首先计算每个元素的贡献
-            contrib = np.where(A != 0, gamma * C / A, 0)
-            # 然后对每个k，计算所有u'≠u的和
-            term2 = contrib.sum(axis=1, keepdims=True) - contrib
-
-            coeff = term1 - term2
-            return coeff
-
-        def step(self, action):
-            # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
-            self.history_action[action] = 1
-            # debugg=sum(self.history_action)
-            # if self.cnt >= self.maxcnt:
-            #     total_rate, channal_power_set = self.cal_sumrate(self.history_action, get_new_CSI=True)
-            #     # update the CSI of environment
-            #     self.history_channel_information = channal_power_set.reshape(-1, )
-            #     self.history_action = np.zeros_like(self.history_channel_information)
-            #     self.cnt = 0
-            # else:
-            # total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
-            total_rate, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information,
-                                                    get_new_CSI=False)
-            total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error,
-                                                          get_new_CSI=False)
-            if self.use_sideinfo:
-                channel_damage_info = np.array([total_rate - total_rate_error])
-            else:
-                channel_damage_info = np.array([0])
-            # self.history_channel_information don't change
-            self.cnt += 1
-            # # reward model2: r = obj_t- obj_t-1
-            reward = total_rate - self.last_total_rate
-            self.last_total_rate = total_rate
-
-            # reward model1: r = obj_t
-            # reward = total_rate
-            if self.eval_mode:
-                reward = total_rate
-            new_obs = np.concatenate(
-                [self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info],
-                axis=-1)
-            terminated, truncated, info = False, False, {}
-            return new_obs, reward, terminated, truncated, info
-
-        def reset(self, seed=None, options=None):
-            # action = self.action_space.sample().reshape(self.nUE, self.nRB)
-            # todo can we optimize this code ?
-            channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
-            for b_index, b in enumerate(self.BSs):
-                for global_u_index in range(self.nUE):
-                    for rb_index in range(self.nRB):
-                        signal_power, channel_power \
-                            = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
-                        channal_power_set[global_u_index][rb_index] = channel_power
-            self.last_total_rate = 0
-            H_dB = channal_power_set.reshape(-1, )
-            H_uk = 10 ** (H_dB / 10)
-            H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-            H_error_dB = 10 * np.log10(H_error_uk)
-            self.history_channel_information_error = H_error_dB  # dBm
-            self.history_channel_information = H_dB  # dBm
-            self.episode_cnt += 1
-            if self.isBurstScenario and self.episode_cnt % 10 == 0:
-                self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-            channel_damage_info = np.array([0])
-            empty_action = np.zeros_like(H_dB)
-            obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
-            self.history_action = empty_action
-            observation, info = np.array(obs), {}
-            self.cnt = 0
-            return observation, info
-
-        def reset_onlyforbaseline(self, given_obs=None, seed=None, options=None, _error_percent=None):
-            if not given_obs:
-                channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
-                # generate new H
-                for b_index, b in enumerate(self.BSs):
-                    for global_u_index in range(self.nUE):
-                        for rb_index in range(self.nRB):
-                            signal_power, channel_power \
-                                = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
-                            channal_power_set[global_u_index][rb_index] = channel_power
-                H_dB = channal_power_set.reshape(-1, )
-                H_uk = 10 ** (H_dB / 10)
-                H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-                H_error_dB = 10 * np.log10(H_error_uk)
-                # 'CSI_error_': self.get_estimated_H(H, self.error_percent),}
-            else:
-                H_dB = given_obs[1]['CSI']
-                if _error_percent:
-                    H_uk = 10 ** (H_dB / 10)
-                    H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-                    H_error_dB = 10 * np.log10(H_error_uk)
-                else:
-                    H_error_dB = given_obs[1]['CSI_error']
-            self.history_channel_information = H_error_dB  # dBm
-            self.history_channel_information_true = H_dB  # dBm
-            self.episode_cnt += 1
-            self.last_total_rate = 0
-            if self.isBurstScenario and self.episode_cnt % 10 == 0:
-                self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-            self.cnt = 0
-            channel_damage_info = np.array([0])
-            empty_action = np.zeros_like(H_dB)
-            obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
-            self.history_action = empty_action
-            observation, info = np.array(obs), {'CSI': H_dB,
-                                                'CSI_error': H_error_dB, }
-            return observation, info
-
-
 class MMSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.history_channel_information_error = None
         self.error_percent = None
         self.use_sideinfo = None
-
-    def set_obs_act_space(self):
-        # set obs and action space based on env's info
-        # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
-        # for b_index, b in enumerate(self.BSs):
-        #     for ue_index, ue in enumerate(self.UEs):
-        #         Loc_diff = b.Get_Location() - ue.Get_Location()
-        #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
-        self.nUE = self.sce.nUEs
-        self.nRB = self.sce.nRBs
-        # action: one UE*RB pair
-        self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB, start=0)  # +1 : add side information
-        # obs: [Channel state information + action dimension (last decision pair)]
-        self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2 + 1,),
-                                                    dtype=self.dtype)
-        self.history_channel_information_error = None
-
     def encode_obs_MM(self, H_sq, action):
         """
         :param H_sq: channel
         :param action: solution a_{k,u}
         :return:
         """
-        H_sq = H_sq.reshape(self.nRB,self.nUE)
         n0 = self.get_n0()
-        a = action.reshape(self.nRB,self.nUE)
+        a = action
         C = H_sq  # c_ku for all k, u
         # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
         # 使用广播技巧
@@ -762,7 +554,7 @@ class MMSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         term2 = contrib.sum(axis=1, keepdims=True) - contrib
 
         coeff = term1 - term2
-        return coeff.reshape(-1)
+        return coeff
 
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
@@ -785,17 +577,18 @@ class MMSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         # self.last_total_rate = total_rate
         # reward model3:
         mm_coeff=self.encode_obs_MM(self.history_channel_information_error, self.history_action)
-        reward = (mm_coeff/mm_coeff.max())[action]
+        mm_coeff_nor = min_max_normalize(mm_coeff)
+        reward = mm_coeff_nor[action]
 
         # reward model1: r = obj_t
         # reward = total_rate
         if self.eval_mode:
             reward = total_rate
 
-
         new_obs = np.concatenate(
-            [self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
-        terminated, truncated, info = False, False, {}
+            [mm_coeff_nor, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
+        # self.history_channel_information_error
+        terminated, truncated, info = False, False, {'pairs_cnt': sum(self.history_action)}
 
         return new_obs, reward, terminated, truncated, info
 
@@ -820,9 +613,15 @@ class MMSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
         if self.isBurstScenario and self.episode_cnt % 10 == 0:
             self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
         channel_damage_info = np.array([0])
-        empty_action = np.zeros_like(H_dB)
-        obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
+        empty_action = np.zeros_like(H_dB) # np.ones_like(H_dB)*0.5
         self.history_action = empty_action
+
+        #mm
+        mm_coeff=self.encode_obs_MM(self.history_channel_information_error, self.history_action)
+        mm_coeff_nor = mm_coeff/mm_coeff.max()
+
+        obs = np.concatenate([mm_coeff_nor, empty_action, channel_damage_info], axis=-1)
+            # H_error_dB
         observation, info = np.array(obs), {}
         self.cnt = 0
         return observation, info
@@ -865,188 +664,12 @@ class MMSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
                                             'CSI_error': H_error_dB, }
         return observation, info
 
-    class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.history_channel_information_error = None
-            self.error_percent = None
-            self.use_sideinfo = None
-
-        def set_obs_act_space(self):
-            # set obs and action space based on env's info
-            # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
-            # for b_index, b in enumerate(self.BSs):
-            #     for ue_index, ue in enumerate(self.UEs):
-            #         Loc_diff = b.Get_Location() - ue.Get_Location()
-            #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
-            self.nUE = self.sce.nUEs
-            self.nRB = self.sce.nRBs
-            # action: one UE*RB pair
-            self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB,
-                                                             start=0)  # +1 : add side information
-            # obs: [Channel state information + action dimension (last decision pair)]
-            self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2 + 1,),
-                                                        dtype=self.dtype)
-            self.history_channel_information_error = None
-
-        def encode_obs_MM(self, H_sq, action):
-            """
-            :param H_sq: channel
-            :param action: solution a_{k,u}
-            :return:
-            """
-            n0 = self.get_n0()
-            a = action
-            C = H_sq  # c_ku for all k, u
-            # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
-            # 使用广播技巧
-            interference = (a * C).sum(axis=1, keepdims=True) - a * C
-
-            # 计算gamma
-            denominator = interference + n0
-            gamma = np.where(denominator != 0, (a * C) / denominator, 0)
-
-            # 计算A
-            A = a * C + interference + n0
-
-            # 计算系数
-            # term1 = C / A (with 0 where A is 0)
-            term1 = np.where(A != 0, C / A, 0)
-
-            # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
-            # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
-            # 首先计算每个元素的贡献
-            contrib = np.where(A != 0, gamma * C / A, 0)
-            # 然后对每个k，计算所有u'≠u的和
-            term2 = contrib.sum(axis=1, keepdims=True) - contrib
-
-            coeff = term1 - term2
-            return coeff
-
-        def step(self, action):
-            # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
-            self.history_action[action] = 1
-            # debugg=sum(self.history_action)
-            # if self.cnt >= self.maxcnt:
-            #     total_rate, channal_power_set = self.cal_sumrate(self.history_action, get_new_CSI=True)
-            #     # update the CSI of environment
-            #     self.history_channel_information = channal_power_set.reshape(-1, )
-            #     self.history_action = np.zeros_like(self.history_channel_information)
-            #     self.cnt = 0
-            # else:
-            # total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
-            total_rate, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information,
-                                                    get_new_CSI=False)
-            total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error,
-                                                          get_new_CSI=False)
-            if self.use_sideinfo:
-                channel_damage_info = np.array([total_rate - total_rate_error])
-            else:
-                channel_damage_info = np.array([0])
-            # self.history_channel_information don't change
-            self.cnt += 1
-            # # reward model2: r = obj_t- obj_t-1
-            reward = total_rate - self.last_total_rate
-            self.last_total_rate = total_rate
-
-            # reward model1: r = obj_t
-            # reward = total_rate
-            if self.eval_mode:
-                reward = total_rate
-            new_obs = np.concatenate(
-                [self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info],
-                axis=-1)
-            terminated, truncated, info = False, False, {}
-            return new_obs, reward, terminated, truncated, info
-
-        def reset(self, seed=None, options=None):
-            # action = self.action_space.sample().reshape(self.nUE, self.nRB)
-            # todo can we optimize this code ?
-            channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
-            for b_index, b in enumerate(self.BSs):
-                for global_u_index in range(self.nUE):
-                    for rb_index in range(self.nRB):
-                        signal_power, channel_power \
-                            = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
-                        channal_power_set[global_u_index][rb_index] = channel_power
-            self.last_total_rate = 0
-            H_dB = channal_power_set.reshape(-1, )
-            H_uk = 10 ** (H_dB / 10)
-            H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-            H_error_dB = 10 * np.log10(H_error_uk)
-            self.history_channel_information_error = H_error_dB  # dBm
-            self.history_channel_information = H_dB  # dBm
-            self.episode_cnt += 1
-            if self.isBurstScenario and self.episode_cnt % 10 == 0:
-                self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-            channel_damage_info = np.array([0])
-            empty_action = np.zeros_like(H_dB)
-            obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
-            self.history_action = empty_action
-            observation, info = np.array(obs), {}
-            self.cnt = 0
-            return observation, info
-
-        def reset_onlyforbaseline(self, given_obs=None, seed=None, options=None, _error_percent=None):
-            if not given_obs:
-                channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
-                # generate new H
-                for b_index, b in enumerate(self.BSs):
-                    for global_u_index in range(self.nUE):
-                        for rb_index in range(self.nRB):
-                            signal_power, channel_power \
-                                = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
-                            channal_power_set[global_u_index][rb_index] = channel_power
-                H_dB = channal_power_set.reshape(-1, )
-                H_uk = 10 ** (H_dB / 10)
-                H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-                H_error_dB = 10 * np.log10(H_error_uk)
-                # 'CSI_error_': self.get_estimated_H(H, self.error_percent),}
-            else:
-                H_dB = given_obs[1]['CSI']
-                if _error_percent:
-                    H_uk = 10 ** (H_dB / 10)
-                    H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-                    H_error_dB = 10 * np.log10(H_error_uk)
-                else:
-                    H_error_dB = given_obs[1]['CSI_error']
-            self.history_channel_information = H_error_dB  # dBm
-            self.history_channel_information_true = H_dB  # dBm
-            self.episode_cnt += 1
-            self.last_total_rate = 0
-            if self.isBurstScenario and self.episode_cnt % 10 == 0:
-                self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-            self.cnt = 0
-            channel_damage_info = np.array([0])
-            empty_action = np.zeros_like(H_dB)
-            obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
-            self.history_action = empty_action
-            observation, info = np.array(obs), {'CSI': H_dB,
-                                                'CSI_error': H_error_dB, }
-            return observation, info
-
 class ReverseSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.history_channel_information_error = None
         self.error_percent = None
         self.use_sideinfo = None
-
-    def set_obs_act_space(self):
-        # set obs and action space based on env's info
-        # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
-        # for b_index, b in enumerate(self.BSs):
-        #     for ue_index, ue in enumerate(self.UEs):
-        #         Loc_diff = b.Get_Location() - ue.Get_Location()
-        #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
-        self.nUE = self.sce.nUEs
-        self.nRB = self.sce.nRBs
-        # action: one UE*RB pair
-        self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB, start=0)  # +1 : add side information
-        # obs: [Channel state information + action dimension (last decision pair)]
-        self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2 + 1,),
-                                                    dtype=self.dtype)
-        self.history_channel_information_error = None
 
     def step(self, action):
         # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
@@ -1145,103 +768,48 @@ class ReverseSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentS
                                             'CSI_error': H_error_dB, }
         return observation, info
 
-    class SequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentSB3):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.history_channel_information_error = None
-            self.error_percent = None
-            self.use_sideinfo = None
+class FixObsSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionAdaptiveEnvironmentSB3):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.history_channel_information_error_norm=None
+        self.history_channel_information_norm = None
 
-        def set_obs_act_space(self):
-            # set obs and action space based on env's info
-            # self.distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
-            # for b_index, b in enumerate(self.BSs):
-            #     for ue_index, ue in enumerate(self.UEs):
-            #         Loc_diff = b.Get_Location() - ue.Get_Location()
-            #         self.distance_matrix[b_index][ue_index] = np.sqrt((Loc_diff[0] ** 2 + Loc_diff[1] ** 2))
-            self.nUE = self.sce.nUEs
-            self.nRB = self.sce.nRBs
-            # action: one UE*RB pair
-            self.action_space = gym.spaces.discrete.Discrete(n=self.nUE * self.nRB,
-                                                             start=0)  # +1 : add side information
-            # obs: [Channel state information + action dimension (last decision pair)]
-            self.observation_space = gym.spaces.box.Box(low=-np.inf, high=np.inf, shape=(self.nUE * self.nRB * 2 + 1,),
-                                                        dtype=self.dtype)
-            self.history_channel_information_error = None
+    def step(self, action):
+        # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
+        self.history_action[action] = 1
 
-        def encode_obs_MM(self, H_sq, action):
-            """
-            :param H_sq: channel
-            :param action: solution a_{k,u}
-            :return:
-            """
-            n0 = self.get_n0()
-            a = action
-            C = H_sq  # c_ku for all k, u
-            # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
-            # 使用广播技巧
-            interference = (a * C).sum(axis=1, keepdims=True) - a * C
+        total_rate, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information, get_new_CSI=False)
+        total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error, get_new_CSI=False)
 
-            # 计算gamma
-            denominator = interference + n0
-            gamma = np.where(denominator != 0, (a * C) / denominator, 0)
+        if self.use_sideinfo:
+            channel_damage_info=np.array([total_rate-total_rate_error])
+        else:
+            channel_damage_info=np.array([0])
 
-            # 计算A
-            A = a * C + interference + n0
+        # self.history_channel_information don't change
+        self.cnt += 1
+        # # reward model2: r = obj_t- obj_t-1
+        # reward = total_rate - self.last_total_rate
+        # self.last_total_rate = total_rate
+        encode_mm_rsrp=self.encode_obs_MM(self.history_channel_information_error_norm, self.history_action).reshape(-1)
 
-            # 计算系数
-            # term1 = C / A (with 0 where A is 0)
-            term1 = np.where(A != 0, C / A, 0)
+        reward = encode_mm_rsrp[action]
+        # reward model1: r = obj_t
+        # reward = total_rate
+        if self.eval_mode:
+            reward = total_rate
 
-            # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
-            # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
-            # 首先计算每个元素的贡献
-            contrib = np.where(A != 0, gamma * C / A, 0)
-            # 然后对每个k，计算所有u'≠u的和
-            term2 = contrib.sum(axis=1, keepdims=True) - contrib
 
-            coeff = term1 - term2
-            return coeff
+        new_obs = np.concatenate([encode_mm_rsrp, self.history_action.reshape(-1, ), channel_damage_info], axis=-1)
+        terminated, truncated, info = False, False, {}
 
-        def step(self, action):
-            # the action is an integer that is between 0 and # of nRB*nUE indexing which RB and UE should be paired
-            self.history_action[action] = 1
-            # debugg=sum(self.history_action)
-            # if self.cnt >= self.maxcnt:
-            #     total_rate, channal_power_set = self.cal_sumrate(self.history_action, get_new_CSI=True)
-            #     # update the CSI of environment
-            #     self.history_channel_information = channal_power_set.reshape(-1, )
-            #     self.history_action = np.zeros_like(self.history_channel_information)
-            #     self.cnt = 0
-            # else:
-            # total_rate, _ = self.cal_sumrate(self.history_action, get_new_CSI=False)
-            total_rate, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information,
-                                                    get_new_CSI=False)
-            total_rate_error, _ = self.cal_sumrate_givenH(self.history_action, self.history_channel_information_error,
-                                                          get_new_CSI=False)
-            if self.use_sideinfo:
-                channel_damage_info = np.array([total_rate - total_rate_error])
-            else:
-                channel_damage_info = np.array([0])
-            # self.history_channel_information don't change
-            self.cnt += 1
-            # # reward model2: r = obj_t- obj_t-1
-            reward = total_rate - self.last_total_rate
-            self.last_total_rate = total_rate
+        return new_obs, reward, terminated, truncated, info
 
-            # reward model1: r = obj_t
-            # reward = total_rate
-            if self.eval_mode:
-                reward = total_rate
-            new_obs = np.concatenate(
-                [self.history_channel_information_error, self.history_action.reshape(-1, ), channel_damage_info],
-                axis=-1)
-            terminated, truncated, info = False, False, {}
-            return new_obs, reward, terminated, truncated, info
-
-        def reset(self, seed=None, options=None):
-            # action = self.action_space.sample().reshape(self.nUE, self.nRB)
-            # todo can we optimize this code ?
+    def reset(self, seed=None, options=None):
+        # action = self.action_space.sample().reshape(self.nUE, self.nRB)
+        # todo can we optimize this code ?
+        if self.history_channel_information is None or self.history_channel_information_error is None:
+            print('Note: channel info is re-produced')
             channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
             for b_index, b in enumerate(self.BSs):
                 for global_u_index in range(self.nUE):
@@ -1249,58 +817,74 @@ class ReverseSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionEnvironmentS
                         signal_power, channel_power \
                             = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
                         channal_power_set[global_u_index][rb_index] = channel_power
-            self.last_total_rate = 0
             H_dB = channal_power_set.reshape(-1, )
             H_uk = 10 ** (H_dB / 10)
             H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
             H_error_dB = 10 * np.log10(H_error_uk)
+            H_error_dB_norm = min_max_normalize(H_error_dB)
+            self.history_channel_information_error_norm = H_error_dB_norm
             self.history_channel_information_error = H_error_dB  # dBm
             self.history_channel_information = H_dB  # dBm
-            self.episode_cnt += 1
-            if self.isBurstScenario and self.episode_cnt % 10 == 0:
-                self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-            channel_damage_info = np.array([0])
-            empty_action = np.zeros_like(H_dB)
-            obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
-            self.history_action = empty_action
-            observation, info = np.array(obs), {}
-            self.cnt = 0
-            return observation, info
+        if self.isBurstScenario and self.episode_cnt % 10 == 0:
+            self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
 
-        def reset_onlyforbaseline(self, given_obs=None, seed=None, options=None, _error_percent=None):
-            if not given_obs:
-                channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
-                # generate new H
-                for b_index, b in enumerate(self.BSs):
-                    for global_u_index in range(self.nUE):
-                        for rb_index in range(self.nRB):
-                            signal_power, channel_power \
-                                = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
-                            channal_power_set[global_u_index][rb_index] = channel_power
-                H_dB = channal_power_set.reshape(-1, )
+        self.last_total_rate = 0
+        self.episode_cnt += 1
+        channel_damage_info = np.array([0])
+
+        empty_action = np.zeros_like(self.history_channel_information)
+        self.history_action = empty_action
+        obs = np.concatenate([self.encode_obs_MM(self.history_channel_information_error_norm, self.history_action).reshape(-1), empty_action, channel_damage_info], axis=-1)
+
+        observation, info = np.array(obs), {'CSI': self.history_channel_information,
+                                            'CSI_error': self.history_channel_information_error, }
+        self.cnt = 0
+        return observation, info
+    def set_obs(self, obs, info):
+        self.reset()
+        H_error_dB = info['CSI_error']
+        H_dB = info['CSI']
+        self.history_channel_information_error = H_error_dB # dBm
+        self.history_channel_information_error_norm= min_max_normalize(H_error_dB)
+        self.history_channel_information = H_dB  # dBm
+        self.history_channel_information_norm = min_max_normalize(H_dB)
+        empty_action = np.zeros_like(H_dB)
+        self.history_action = empty_action
+
+    def reset_onlyforbaseline(self, given_obs=None,seed=None, options=None, _error_percent=None):
+        if not given_obs:
+            channal_power_set = np.zeros((self.sce.nUEs, self.sce.nRBs))
+            # generate new H
+            for b_index, b in enumerate(self.BSs):
+                for global_u_index in range(self.nUE):
+                    for rb_index in range(self.nRB):
+                        signal_power, channel_power \
+                            = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                        channal_power_set[global_u_index][rb_index] = channel_power
+            H_dB = channal_power_set.reshape(-1, )
+            H_uk= 10 ** (H_dB/10)
+            H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
+            H_error_dB = 10*np.log10(H_error_uk)
+                                                # 'CSI_error_': self.get_estimated_H(H, self.error_percent),}
+        else:
+            H_dB=given_obs[1]['CSI']
+            if _error_percent:
                 H_uk = 10 ** (H_dB / 10)
                 H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
                 H_error_dB = 10 * np.log10(H_error_uk)
-                # 'CSI_error_': self.get_estimated_H(H, self.error_percent),}
             else:
-                H_dB = given_obs[1]['CSI']
-                if _error_percent:
-                    H_uk = 10 ** (H_dB / 10)
-                    H_error_uk = self.get_estimated_H(H_uk, self.error_percent)
-                    H_error_dB = 10 * np.log10(H_error_uk)
-                else:
-                    H_error_dB = given_obs[1]['CSI_error']
-            self.history_channel_information = H_error_dB  # dBm
-            self.history_channel_information_true = H_dB  # dBm
-            self.episode_cnt += 1
-            self.last_total_rate = 0
-            if self.isBurstScenario and self.episode_cnt % 10 == 0:
-                self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
-            self.cnt = 0
-            channel_damage_info = np.array([0])
-            empty_action = np.zeros_like(H_dB)
-            obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
-            self.history_action = empty_action
-            observation, info = np.array(obs), {'CSI': H_dB,
-                                                'CSI_error': H_error_dB, }
-            return observation, info
+                H_error_dB = given_obs[1]['CSI_error']
+        self.history_channel_information = H_error_dB # dBm
+        self.history_channel_information_true = H_dB  # dBm
+        self.episode_cnt += 1
+        self.last_total_rate = 0
+        if self.isBurstScenario and self.episode_cnt % 10 == 0:
+            self.user_burst = np.random.rand(self.nUE) < self.burst_prob  # Shape: (nUE,)
+        self.cnt = 0
+        channel_damage_info = np.array([0])
+        empty_action = np.zeros_like(H_dB)
+        obs = np.concatenate([H_error_dB, empty_action, channel_damage_info], axis=-1)
+        self.history_action = empty_action
+        observation, info = np.array(obs), {'CSI': H_dB,
+                                            'CSI_error': H_error_dB,}
+        return observation, info

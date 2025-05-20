@@ -1,11 +1,14 @@
 import copy
 import os
+import pickle
 import time
 
 import numpy as np
 import cvxpy as cp
-from networkx.algorithms.bipartite.basic import color
+from gymnasium.wrappers import TimeLimit
 
+from environmentSB3 import SequenceDecisionAdaptiveEnvironmentSB3
+from module.sequence_ppo import SequencePPO
 from utils import load_env, get_TimeLogEvalDir
 
 
@@ -262,65 +265,38 @@ def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, ve
     max_iter = max_iter  # 最大迭代次数
     H_sq = H_uk
     for iter in range(max_iter):
-        # # 计算当前 gamma 和 A
-        # gamma = np.zeros((Nk, Nu))
-        # A = np.zeros((Nk, Nu))
-        # for k in range(Nk):
-        #     for u in range(Nu):
-        #         c_ku = P[k, u] * H_sq[k, u]
-        #         # 计算干扰项
-        #         interference = 0
-        #         for uprime in range(Nu):
-        #             if uprime != u:
-        #                 d_ku_prime = P[k, uprime] * H_sq[k, uprime]
-        #                 interference += a[k, uprime] * d_ku_prime
-        #         denominator = interference + n0
-        #         gamma_ku = (a[k, u] * c_ku) / denominator if denominator != 0 else 0
-        #         gamma[k, u] = gamma_ku
-        #         A_ku = a[k, u] * c_ku + interference + n0
-        #         A[k, u] = A_ku
-        #
-        # # 计算系数
-        # coeff = np.zeros((Nk, Nu))
-        # for k in range(Nk):
-        #     for u in range(Nu):
-        #         c_ku = P[k, u] * H_sq[k, u]
-        #         term1 = c_ku / A[k, u] if A[k, u] != 0 else 0
-        #         term2 = 0
-        #         for uprime in range(Nu):
-        #             if uprime != u:
-        #                 gamma_ku_prime = gamma[k, uprime]
-        #                 d_ku_prime = P[k, uprime] * H_sq[k, uprime]
-        #                 A_ku_prime = A[k, uprime]
-        #                 term2 += (gamma_ku_prime * d_ku_prime) / A_ku_prime if A_ku_prime != 0 else 0
-        #         coeff[k, u] = term1 - term2
-
-        # vec start
-        C = P * H_sq  # c_ku for all k, u
-        # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
-        # 使用广播技巧
-        interference = (a * C).sum(axis=1, keepdims=True) - a * C
-
-        # 计算gamma
-        denominator = interference + n0
-        gamma = np.where(denominator != 0, (a * C) / denominator, 0)
-
-        # 计算A
-        A = a * C + interference + n0
+        # 计算当前 gamma 和 A
+        gamma = np.zeros((Nk, Nu))
+        A = np.zeros((Nk, Nu))
+        for k in range(Nk):
+            for u in range(Nu):
+                c_ku = P[k, u] * H_sq[k, u]
+                # 计算干扰项
+                interference = 0
+                for uprime in range(Nu):
+                    if uprime != u:
+                        d_ku_prime = P[k, uprime] * H_sq[k, uprime]
+                        interference += a[k, uprime] * d_ku_prime
+                denominator = interference + n0
+                gamma_ku = (a[k, u] * c_ku) / denominator if denominator != 0 else 0
+                gamma[k, u] = gamma_ku
+                A_ku = a[k, u] * c_ku + interference + n0
+                A[k, u] = A_ku
 
         # 计算系数
-        # term1 = C / A (with 0 where A is 0)
-        term1 = np.where(A != 0, C / A, 0)
-
-        # term2 = sum_{u'≠u} (gamma[k,u'] * C[k,u']) / A[k,u']
-        # 对于每个k,u，计算sum_{u'≠u} gamma[k,u']*C[k,u']/A[k,u']
-        # 首先计算每个元素的贡献
-        contrib = np.where(A != 0, gamma * C / A, 0)
-        # 然后对每个k，计算所有u'≠u的和
-        term2 = contrib.sum(axis=1, keepdims=True) - contrib
-
-        coeff = term1 - term2
-        # vec end
+        coeff = np.zeros((Nk, Nu))
+        for k in range(Nk):
+            for u in range(Nu):
+                c_ku = P[k, u] * H_sq[k, u]
+                term1 = c_ku / A[k, u] if A[k, u] != 0 else 0
+                term2 = 0
+                for uprime in range(Nu):
+                    if uprime != u:
+                        gamma_ku_prime = gamma[k, uprime]
+                        d_ku_prime = P[k, uprime] * H_sq[k, uprime]
+                        A_ku_prime = A[k, uprime]
+                        term2 += (gamma_ku_prime * d_ku_prime) / A_ku_prime if A_ku_prime != 0 else 0
+                coeff[k, u] = term1 - term2
 
         # 更新a，根据系数决定0或1
         a_new = np.where(coeff > 0, 1, 0)
@@ -332,52 +308,6 @@ def MM(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, ve
             break
         a = a_new.copy()
     return a_new, None
-
-
-def MM_seq(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=None):
-    a = np.zeros_like(init_a)
-    # 参数设置
-    Nk = K  # 资源块数
-    Nu = U  # 用户数
-    max_iter = max_iter  # 最大迭代次数
-    H_sq = H_uk
-    for iter in range(max_iter):
-
-        # vec start
-        C = P * H_sq  # c_ku for all k, u
-        # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
-        # 使用广播技巧
-        interference = (a * C).sum(axis=1, keepdims=True) - a * C
-
-        # 计算gamma
-        denominator = interference + n0
-        gamma = np.where(denominator != 0, (a * C) / denominator, 0)
-
-        # 计算A
-        A = a * C + interference + n0
-
-        term1 = np.where(A != 0, C / A, 0)
-
-        contrib = np.where(A != 0, gamma * C / A, 0)
-
-        term2 = contrib.sum(axis=1, keepdims=True) - contrib
-
-        coeff = term1 - term2
-
-        argmaxidx=np.argmax(coeff)
-        ashap = a.shape
-        a_new = a.copy().reshape(-1)
-        a_new[argmaxidx] = 1
-        a_new = a_new.reshape(ashap)
-
-        # 检查收敛
-        if np.max(np.abs(a_new - a)) < tol:
-            if verbose:
-                print(f"收敛于第 {iter} 次迭代")
-            break
-        a = a_new.copy()
-    return a_new, None
-
 
 def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4, verbose=False, solver=cp.MOSEK):
     H = H_uk
@@ -444,7 +374,7 @@ def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-
             sum_all = np.sum(sum_matrix, axis=1)
             numerator = np.diag(sum_matrix)
             denominator = sum_all - numerator + n0
-            gamma[k] = numerator / (denominator)
+            gamma[k] = numerator / (denominator + 1e-15)
         obj_val = np.sum(np.log(1 + gamma))
         obj_vals.append(obj_val)
 
@@ -456,7 +386,74 @@ def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-
         print('SCA Warning: Solver did not converge.')
     return a_current, obj_vals
 
+def get_model_paths(root_dir):
+    """获取所有训练好的模型路径"""
+    model_paths = []
+    error_rates = []
+    for root, dirs, files in os.walk(root_dir):
+        for file in files:
+            if file.endswith('.zip') and 'model_saves' in root:
+                # if file.endswith('.zip') and 'model_saves' in root and 'best' in file:
+                model_paths.append(os.path.join(root, file))
+                # 从路径中提取error rate
+                error_match = re.search(r'error_([0-9.]+)', root)
+                error_rate = float(error_match.group(1)) if error_match else 0.0
+                error_rates.append(error_rate)
+    return model_paths, error_rates
 
+def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
+    """评估单个模型的性能"""
+    nUE = 12
+    nRB = 30
+    Nrb = 15
+    episode_length = nUE * Nrb
+    res = []
+    num_pair = []
+    test_num = 80
+
+    # 加载环境和模型
+    unwrapped_env = load_env(f'Experiment_result/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
+    model = SequencePPO.load(model_path)
+
+    # 设置环境参数
+    unwrapped_env.error_percent = error_rate
+    unwrapped_env.use_sideinfo = use_sideinfo
+    unwrapped_env.eval_mode = True
+    assert isinstance(unwrapped_env,SequenceDecisionAdaptiveEnvironmentSB3)
+    test_env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
+
+    # 测试循环
+    for _ in range(test_num):
+        obs, _ = test_env.reset_onlyforbaseline(given_obs,)
+        truncated = False
+        while not truncated:
+            action, _ = model.predict(observation=obs, deterministic=False)
+            obs, reward, terminated, truncated, info = test_env.step(action)
+            if truncated:
+                res.append(reward)
+                num_pair.append(sum(obs[nUE * nRB:]))
+
+    return np.mean(res), np.mean(num_pair)
+
+
+def evaluate_models(logger, model_dir, use_sideinfo, given_obs=None):
+    """评估指定目录下的所有模型"""
+    model_paths, error_rates = get_model_paths(model_dir)
+    results = [[], []]
+    best_results = [[], []]
+
+    for idx, (model_path, error_rate) in enumerate(zip(model_paths, error_rates)):
+        reward, pairs = eval_model(model_path, error_rate, use_sideinfo, given_obs)
+        logger.log(f"\n错误率: {error_rate:.2f}")
+        logger.log(f"平均奖励: {reward:.3f}")
+        logger.log(f"平均配对数: {pairs:.3f}")
+        results[0].append(reward)
+        results[1].append(pairs)
+        if idx % 2 == 0:
+            best_results[0].append(max(results[0][-2:]))
+            best_results[1].append(max(results[1][-2:]))
+
+    return best_results, results
 if __name__ == '__main__':
     is_H_estimated = True
     testnum = 10
@@ -491,16 +488,21 @@ if __name__ == '__main__':
         error_percent_list = np.arange(0, 65, 5) / 100 if is_H_estimated else [0]
         # generate the H instance for experiment
         H_list = []
-        for test_idx in range(testnum):
-            obs, info = env.reset_onlyforbaseline()
-            H_list.append((obs, info))
+        # for test_idx in range(testnum):
+        #     obs, info = env.reset_onlyforbaseline()
+        #     H_list.append((obs, info))
 
+        obs_path='Experiment_result/seqPPOcons_R2A3_fixobs_mm/UE12RB30/E1_Nrb15_epl_180_error_0.00/date20250425time140309/obsinfo.pkl'
+        with open(obs_path, 'rb') as f:
+            loaded_data = pickle.load(f)
+        obs, info = loaded_data['obs'], loaded_data['info']
+        H_list.append((obs, info))
 
         def run_exp(_H_list, _error_percent_list, algo):
             sol_sce_dict = {}
-            mean_cnt_per_error = []
-            mean_obj_per_error = []
-            for _error_percent in _error_percent_list:
+            mean_cnt_per_error=[]
+            mean_obj_per_error=[]
+            for eidx, _error_percent in enumerate(_error_percent_list):
                 sol_list = []
                 obj_list = []
                 print("=" * 10, f"error_percent: {_error_percent:.2f}", "=" * 10)
@@ -544,25 +546,23 @@ if __name__ == '__main__':
                 cnt_pair_avg = cnt_pair / len(sol_list)
                 print(f"{testnum}次实验平均后离散化目标函数值:", np.mean(obj_list))
                 print(f"{testnum}次实验平均后问题解pair数量:", cnt_pair_avg)
-                mean_obj_per_error.append(np.round(np.mean(obj_list), 3))
-                mean_cnt_per_error.append(np.round(cnt_pair_avg, 3))
+                mean_obj_per_error.append(np.round(np.mean(obj_list),3))
+                mean_cnt_per_error.append(np.round(cnt_pair_avg,3))
                 sol_sce_dict.update(
                     {
                         f'u{nUE}r{nRB}_err{error_percent}': sol_list
                     }
                 )
-            info = (mean_obj_per_error, mean_cnt_per_error)
+            info = (mean_cnt_per_error, mean_obj_per_error)
             print(info)
             return sol_sce_dict, info
-
-
-        res = {}
-        for idx, (name, algo) in enumerate(zip(['MM_seq', 'MM', 'GradProj', 'SCA'], [MM_seq, MM, GradProj, SCA_vec])):
+        res={}
+        for idx, (name, algo) in enumerate(zip(['MM','GradProj','SCA'],[MM,GradProj,SCA_vec])):
             # if idx!=2 :
             #     continue
-            print("*" * 20, f"{name} experiment", "*" * 20)
+            print("*"*20,f"{name} experiment","*"*20)
             sol_sce_dict, info = run_exp(H_list, error_percent_list, algo)
-            res.update({name : info})
+            res.update({'name':info})
     t2 = time.time()
 
     print(f'all test are done, time: {t2 - t1:.2f}s')
@@ -590,13 +590,13 @@ if __name__ == '__main__':
 
     # 创建图形
     plt.figure(figsize=(10, 6))  # 设置图形大小
-    color = ['blue', 'red', 'green', 'purple', 'orange']
-    dot = ['.', '--', ':', '-.']
-    for idx, (algo_name, clr, d) in enumerate(zip(['MM_seq','MM', 'GradProj', 'SCA'], color, dot)):
-        y = res[algo_name][1]
-        plt.plot(x, y, label=algo_name, color=clr, linestyle=d)
-    log_dir = get_TimeLogEvalDir(model_name='baseline', args='UE12RB30')
-    fig_path = os.path.join(log_dir, 'figures.jpg')
+    color=['blue','red','green','purple','orange']
+    dot=['','--',':','-.']
+    for d,clr,algo_name in enumerate(zip(color,dot,['MM','GradProj','SCA'])):
+        y = info[algo_name][1]
+        plt.plot(x, y, label=algo_name, color=clr)
+    log_dir=get_TimeLogEvalDir(model_name='baseline', args='UE12RB30')
+    fig_path=os.path.join(log_dir,'figures.jpg')
     # 绘制五组曲线
     # plt.plot(x, y1, label='SeqPPO', color='blue')
     # plt.plot(x, y2, label='cos(x)', color='red', linestyle='--')

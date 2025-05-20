@@ -37,7 +37,7 @@ def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
     test_num = 50
 
     # 加载环境和模型
-    unwrapped_env = load_env(f'Experiment_result/old/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
+    unwrapped_env = load_env(f'Old_experiment_result/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
     model = SequencePPO.load(model_path)
 
     # 设置环境参数
@@ -56,7 +56,7 @@ def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
                 obs, reward, terminated, truncated, info = test_env.step(action)
                 if truncated:
                     res.append(reward)
-                    num_pair.append(sum(obs[nUE * nRB:]))
+                    num_pair.append(sum(obs[nUE * nRB:-1]))
     else:
         # 测试循环
         for o in range(given_obs):
@@ -64,7 +64,7 @@ def eval_model(model_path, error_rate, use_sideinfo, given_obs=None):
             obs, _ = test_env.unwrapped.reset_onlyforbaseline(given_obs=o,_error_percent=error_rate)
             truncated = False
             while not truncated:
-                action, _ = model.predict(observation=obs, deterministic=False)
+                action, _ = model.predi9ct(observation=obs, deterministic=False)
                 obs, reward, terminated, truncated, info = test_env.step(action)
                 if truncated:
                     res.append(reward)
@@ -194,11 +194,11 @@ def main():
 
         # 测试使用side info的模型
         logger.log("\n====== 测试使用side info的模型 ======")
-        best_res_si, res_si = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_sideinfo", True)
+        best_res_si, res_si = evaluate_models(logger, "Old_experiment_result/seqPPOcons_R2A3_sideinfo", True)
 
         # 测试不使用side info的模型
         logger.log("\n====== 测试不使用side info的模型 ======")
-        best_res_nosi, res_nosi = evaluate_models(logger, "Experiment_result/seqPPOcons_R2A3_nosideinfo", False)
+        best_res_nosi, res_nosi = evaluate_models(logger, "Old_experiment_result/seqPPOcons_R2A3_nosideinfo", False)
 
         # 输出结果
         logger.log("\n====== 测试结果 ======")
