@@ -8,6 +8,7 @@ from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.ppo.ppo import SelfPPO
 from torch.nn import functional as F
 
 from stable_baselines3.common.buffers import RolloutBuffer
@@ -251,6 +252,32 @@ class SequencePPO(PPO):
         callback.on_rollout_end()
 
         return True
+    def learn(
+        self: SelfPPO,
+        total_timesteps: int,
+        callback: MaybeCallback = None,
+        log_interval: int = 1,
+        tb_log_name: str = "PPO",
+        reset_num_timesteps: bool = True,
+        progress_bar: bool = False,
+    ) -> SelfPPO:
+        # self.pretrain_actor()
+        return super().learn(
+            total_timesteps=total_timesteps,
+            callback=callback,
+            log_interval=log_interval,
+            tb_log_name=tb_log_name,
+            reset_num_timesteps=reset_num_timesteps,
+            progress_bar=progress_bar,
+        )
+    def pretrain_actor(self):
+        import torch
+        import torch.nn as nn
+        import torch.optim as optim
+        from torch.utils.data import DataLoader, TensorDataset
+
+        model = self.policy.action_net
+
 
 class RecurrentSequencePPO(RecurrentPPO):
     def __init__(self, *args, **kwargs):
