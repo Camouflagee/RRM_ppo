@@ -789,11 +789,12 @@ class FixObsSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionAdaptiveEnvir
         # self.history_channel_information don't change
         self.cnt += 1
         # # reward model2: r = obj_t- obj_t-1
-        # reward = total_rate - self.last_total_rate
-        # self.last_total_rate = total_rate
+        reward = total_rate - self.last_total_rate
+        self.last_total_rate = total_rate
+
         encode_mm_rsrp=self.encode_obs_MM(self.history_channel_information_error_norm, self.history_action).reshape(-1)
 
-        reward = encode_mm_rsrp[action]
+        # reward = encode_mm_rsrp[action]
         # reward model1: r = obj_t
         # reward = total_rate
         if self.eval_mode:
