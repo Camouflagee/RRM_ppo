@@ -1,11 +1,16 @@
+from functools import partial
 from typing import Tuple
 
+import numpy as np
 import torch
 import torch as th
 from sb3_contrib.common.recurrent.policies import RecurrentActorCriticPolicy
 from sb3_contrib.common.recurrent.type_aliases import RNNStates
 from stable_baselines3.common.distributions import CategoricalDistribution
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.type_aliases import Schedule
+from torch import nn
+
 from utils import DotDic
 
 
@@ -16,6 +21,48 @@ class SequenceActorCriticPolicy(ActorCriticPolicy):
             self.const_args = DotDic(const_args)
         else:
             self.const_args = const_args
+    def _build(self, lr_schedule: Schedule) -> None:
+        """
+        Create the networks and the optimizer.
+
+        :param lr_schedule: Learning rate schedule
+            lr_schedule(1) is the initial learning rate
+        """
+        self._build_mlp_extractor()
+
+        latent_dim_pi = self.mlp_extractor.latent_dim_pi
+
+        if isinstance(self.action_dist, (CategoricalDistribution,)):
+            self.action_net = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi)
+        else:
+            raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
+
+        self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+        # Init weights: use orthogonal initialization
+        # with small initial weight for the output
+        if self.ortho_init:
+            # TODO: check for features_extractor
+            # Values from stable-baselines.
+            # features_extractor/mlp values are
+            # originally from openai/baselines (default gains/init_scales).
+            module_gains = {
+                self.features_extractor: np.sqrt(2),
+                self.mlp_extractor: np.sqrt(2),
+                self.action_net: 0.01,
+                self.value_net: 1,
+            }
+            if not self.share_features_extractor:
+                # Note(antonin): this is to keep SB3 results
+                # consistent, see GH#1148
+                del module_gains[self.features_extractor]
+                module_gains[self.pi_features_extractor] = np.sqrt(2)
+                module_gains[self.vf_features_extractor] = np.sqrt(2)
+
+            for module, gain in module_gains.items():
+                module.apply(partial(self.init_weights, gain=gain))
+
+        # Setup optimizer with initial learning rate
+        self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)  # type: ignore[call-arg]
 
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
