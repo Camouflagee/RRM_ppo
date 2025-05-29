@@ -390,7 +390,7 @@ class Environment(gym.Env):
         if not hasattr(self.UEs[0], 'serving_BSs'):
             self.init_ue_serving_BSs()
         # 预先创建基站字典以便快速查找
-        if self.bs_dict is None:
+        if not hasattr(self, 'bs_dict'):
             self.bs_dict = {bs.id: bs for bs in self.BSs}
 
         bs_dict = self.bs_dict
@@ -406,7 +406,7 @@ class Environment(gym.Env):
 
             while attempt < max_attempts:
                 # 生成候选位置，基于当前位置的随机移动（步长0到5米）
-                r = 5 * random.uniform(0, 1)
+                r = 3 * random.uniform(0, 1)
                 theta = uniform(-pi, pi)
                 delta_x = r * np.cos(theta)
                 delta_y = r * np.sin(theta)
@@ -431,7 +431,8 @@ class Environment(gym.Env):
                     new_location = [candidate_x, candidate_y]
                     break  # 找到有效位置，退出循环
                 attempt += 1
-
+            if attempt >= max_attempts:
+                print(f'bs{ue.serving_BSs}\'s ue{ue.id} is not move')
             # 更新用户位置
             if new_location:
                 ue.location = new_location
@@ -441,6 +442,7 @@ class Environment(gym.Env):
                     dx = new_location[0] - bs.BS_Loc[0]
                     dy = new_location[1] - bs.BS_Loc[1]
                     self.distance_matrix[b_index][ue_index] = sqrt(dx ** 2 + dy ** 2)
+
 
     def BS_Init(self) -> list:  # Initialize all the base stations
         BaseStations = []  # The vector of base stations
