@@ -75,7 +75,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_class
         )
     else:
         tr_args['policy_kwargs'] = {'const_args': env_args,
-                                    'net_arch': dict(pi=[256, 256], vf=[128, 128])
+                                    'net_arch': dict(pi=[360, 360], vf=[128, 128]),
                                     }
         tr_args.n_steps = collect_rollout_steps
         model = policy_class(policy=net_class, env=env, verbose=1, device='cpu', **tr_args, )
@@ -179,7 +179,7 @@ if __name__ == '__main__':
             _total_timesteps = 800000
             _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
             _load_model_path = None
-                # f'Experiment_result/seqPPOcons_R2A3_fixobs_mm/UE12RB30/E1_Nrb15_epl_180_error_0.00/date20250424time204929/model_saves/seqPPOcons_R2A3_fixobs_mm_NumSteps_800768_.zip'
+                # f'Experiment_result\seqPPOcons_R2A3_fixobs_mm\\UE12RB30\E2_Nrb15_epl_180_error_0.00\date20250521time162839\model_saves\seqPPOcons_R2A3_fixobs_mm_NumSteps_3702784_.zip'
             _obs_path=\
                 f'Experiment_result/seqPPOcons_R2A3_fixobs_mm/UE12RB30/E1_Nrb15_epl_180_error_0.00/date20250424time204929/obsinfo.pkl'
             trainer(_total_timesteps, _version, _envName, _expNo, _episode_length,

@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from gym.wrappers import TimeLimit
+from gymnasium.wrappers import TimeLimit
 
+from environmentSB3 import MMSequenceDecisionAdaptiveEnvironmentSB3
 from utils import Logger, load_env
 
 
@@ -78,7 +79,7 @@ if __name__ == "__main__":
     episode_length = nUE * Nrb
     res = []
     num_pair = []
-    test_num = 50
+    test_num = 10
 
     # 加载环境和模型
     unwrapped_env = load_env(f'Old_experiment_result/seqPPOcons_R2A3_sideinfo/UE{nUE}RB{nRB}/ENV/env.zip')
@@ -90,15 +91,24 @@ if __name__ == "__main__":
     unwrapped_env.error_percent = 0
     unwrapped_env.use_sideinfo = 0
     unwrapped_env.eval_mode = True
+    env_class=MMSequenceDecisionAdaptiveEnvironmentSB3
+    if not isinstance(unwrapped_env, env_class):
+        init_env = env_class(unwrapped_env.sce)
+        init_env.__setstate__(unwrapped_env.__getstate__())
+        unwrapped_env = init_env
+
     test_env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
     # 测试循环
     for _ in range(test_num):
         obs, _ = test_env.reset()
-        obs = torch.tensor(obs, dtype=torch.float)
+        # obs = torch.tensor(obs, dtype=torch.float64)
+        test_env.env.eval_mode = True
         truncated = False
+        ob=[obs[:nUE*nRB]]
         while not truncated:
-            action, _ = model(obs).argmax()
+            action = obs[:nUE*nRB].argmax()
             obs, reward, terminated, truncated, info = test_env.step(action)
+            ob.append(obs[:nUE*nRB])
             if truncated:
                 res.append(reward)
                 num_pair.append(sum(obs[nUE * nRB:-1]))

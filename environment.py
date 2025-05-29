@@ -172,6 +172,31 @@ class Environment(gym.Env):
         if sce.prt:
             self.showmap()
 
+        self.init_ue_serving_BSs()  # 新增初始化调用
+
+    def init_ue_serving_BSs(self):
+        """基于现有基站UE_set初始化每个UE的关联基站列表"""
+        # 创建BS_ID到BS对象的快速映射
+        bs_id_map = {bs.id: bs for bs in self.BSs}
+
+        for ue in self.UEs:
+            # 为每个UE初始化服务基站列表
+            if not hasattr(ue, 'serving_BSs'):
+                ue.serving_BSs = set()
+
+            # 遍历所有基站寻找包含该UE的BS
+            for bs in self.BSs:
+                if ue.id in bs.UE_set:
+                    ue.serving_BSs.add(bs.id)
+
+            # 若UE没有被任何基站覆盖，自动关联最近基站（容错逻辑）
+            if len(ue.serving_BSs) == 0:
+                print('environment.py: UE没有被任何基站覆盖，自动关联最近基站（容错逻辑）')
+                closest_bs = min(self.BSs,
+                                 key=lambda b: np.linalg.norm(
+                                     np.array(b.BS_Loc) - np.array(ue.location)))
+                ue.serving_BSs.add(closest_bs.id)
+                closest_bs.UE_set.append(ue.id)  # 更新BS的UE_set
     def get_distance_matrix(self):
         distance_matrix = np.zeros((len(self.BSs), len(self.UEs)))
         for b_index, b in enumerate(self.BSs):
@@ -188,6 +213,12 @@ class Environment(gym.Env):
         # return the environmental noise # note: not dB
         return self.sce.N0 * self.sce.BW
     def get_estimated_H(self, H: np.ndarray, error_percentage: float):
+        """
+
+        :param H: input H should be real number unit, not dB unit.
+        :param error_percentage:
+        :return:
+        """
         # 设置估计误差比例
         # error_percentage = 0.05  # 5%
 
@@ -200,7 +231,6 @@ class Environment(gym.Env):
         # noise_factor = 1 + np.random.normal(loc=0, scale=error_percentage, size=H.shape)
         # estimated_H = H * noise_factor
         # estimated_H = np.maximum(estimated_H, 1e-15)
-
         return estimated_H
 
     def __setstate__(self, state):
@@ -355,20 +385,62 @@ class Environment(gym.Env):
 
     def random_walk(self):
         """
-        let UE randomly change their position but not walk outside its original BS singal region
-
-        :return:
+        用户随机移动，且更新距离矩阵
         """
-        # Note: (not considered any more)
-        # also do not let UE in the intersection of two BSs regions outside the intersection of two BS regions
+        if not hasattr(self.UEs[0], 'serving_BSs'):
+            self.init_ue_serving_BSs()
+        # 预先创建基站字典以便快速查找
+        if self.bs_dict is None:
+            self.bs_dict = {bs.id: bs for bs in self.BSs}
 
-        # 1.change the location of ue randomly inside the circle with center of ue's original location
-        # 2.if the ue go outside the BS's region, its
+        bs_dict = self.bs_dict
         for ue in self.UEs:
-            # change the location of ue randomly inside the circle with center of ue's original location
-            r = 5 * random.uniform(0.5, 1)
-            theta = uniform(-pi, pi)
-            ue.location = [ue.original_location[0] + r * np.cos(theta), ue.original_location[1] + r * np.sin(theta)]
+            # 如果用户没有关联的基站，跳过（理论上不会发生）
+            if not ue.serving_BSs:
+                continue
+
+            max_attempts = 100
+            attempt = 0
+            new_location = None
+            current_x, current_y = ue.location
+
+            while attempt < max_attempts:
+                # 生成候选位置，基于当前位置的随机移动（步长0到5米）
+                r = 5 * random.uniform(0, 1)
+                theta = uniform(-pi, pi)
+                delta_x = r * np.cos(theta)
+                delta_y = r * np.sin(theta)
+                candidate_x = current_x + delta_x
+                candidate_y = current_y + delta_y
+
+                # 检查候选位置是否在所有关联基站的覆盖范围内
+                valid = True
+                for bs_id in ue.serving_BSs:
+                    bs = bs_dict.get(bs_id)
+                    if not bs:
+                        valid = False
+                        break
+                    dx = candidate_x - bs.BS_Loc[0]
+                    dy = candidate_y - bs.BS_Loc[1]
+                    distance = sqrt(dx ** 2 + dy ** 2)
+                    if distance > bs.BS_Radius:
+                        valid = False
+                        break
+
+                if valid:
+                    new_location = [candidate_x, candidate_y]
+                    break  # 找到有效位置，退出循环
+                attempt += 1
+
+            # 更新用户位置
+            if new_location:
+                ue.location = new_location
+                # 更新该用户在距离矩阵中的所有基站距离
+                ue_index = self.UEs.index(ue)  # 获取用户索引
+                for b_index, bs in enumerate(self.BSs):
+                    dx = new_location[0] - bs.BS_Loc[0]
+                    dy = new_location[1] - bs.BS_Loc[1]
+                    self.distance_matrix[b_index][ue_index] = sqrt(dx ** 2 + dy ** 2)
 
     def BS_Init(self) -> list:  # Initialize all the base stations
         BaseStations = []  # The vector of base stations
@@ -552,34 +624,6 @@ class Environment(gym.Env):
         H_power_dB = loss_dB
         return Rx_power, H_power_dB
 
-    # Path loss models
-    # def path_loss_LOS(d):
-    #     return 32.4 + 21 * np.log10(d) + 20 * np.log10(fc)
-    #
-    # def path_loss_NLOS(d):
-    #     return 35.3 * np.log10(d) + 22.4 + 21.3 * np.log10(fc) - 0.3 * (1.5 - 1.5)
-    #
-    # # Main Simulator
-    # fc = 2.5
-    # num_pts = 100
-    # dist = np.linspace(10, 5000, num_pts)
-    #
-    # pathloss = []
-    # for d in dist:
-    #     p_LOS = prob_LOS(d)
-    #     if np.random.rand() < p_LOS:
-    #         L = path_loss_LOS(d)
-    #     else:
-    #         L = path_loss_NLOS(d)
-    #
-    #     pathloss.append(L)
-    #
-    # # Plot
-    # plt.plot(dist, pathloss)
-    # plt.xlabel('Distance (m)')
-    # plt.ylabel('Path Loss (dB)')
-    # plt.title("Combined LOS/NLOS Path Loss Model")
-    # plt.show()
     def test_cal_Receive_Power_without_fading(self, bs, d):
         p_LOS = self.prob_LOS(d)
         if np.random.rand() < p_LOS:
@@ -751,6 +795,19 @@ class Environment(gym.Env):
         h_dB = 10 * log10(h ** 2)
         return h_dB
 
+    def get_new_CSI_dB(self):
+        """
+
+        :return:
+        """
+        channal_power_set = np.zeros((self.nBS, self.sce.nUEs, self.sce.nRBs))
+        for b_index, b in enumerate(self.BSs):
+            for global_u_index in range(self.nUE):
+                for rb_index in range(self.nRB):
+                    signal_power, channel_power \
+                        = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][global_u_index])
+                    channal_power_set[b_index][global_u_index][rb_index] = channel_power
+        return channal_power_set
     # def cal_SINR(self, action, action_i, state, scenario):  # Get reward for the state-action pair
     #     BS = scenario.Get_BaseStations()
     #     L = scenario.BS_Number()  # The total number of BSs

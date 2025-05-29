@@ -347,6 +347,7 @@ def MM_seq(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-4
         C = P * H_sq  # c_ku for all k, u
         # 计算干扰项 (对于每个k,u，计算sum_{u'≠u} a[k,u']*P[k,u']*H_sq[k,u'])
         # 使用广播技巧
+        # ndarray 中 a*C是逐元素相乘
         interference = (a * C).sum(axis=1, keepdims=True) - a * C
 
         # 计算gamma
@@ -459,7 +460,7 @@ def SCA_vec(init_a, H_uk, N_rb, K, U, P, n0, BW, eta=0.06, max_iter=100, tol=1e-
 
 if __name__ == '__main__':
     is_H_estimated = True
-    testnum = 10
+    testnum = 50
     t1 = time.time()
     for idx, (nUE, nRB) in enumerate(
             zip([5, 10, 12, 15], [10, 20, 30, 40])):  # 12,30,27; 10,20,21; 5,10,12; UE,RB,episode_length
@@ -558,8 +559,8 @@ if __name__ == '__main__':
 
         res = {}
         for idx, (name, algo) in enumerate(zip(['MM_seq', 'MM', 'GradProj', 'SCA'], [MM_seq, MM, GradProj, SCA_vec])):
-            # if idx!=2 :
-            #     continue
+            if idx!=0 :
+                continue
             print("*" * 20, f"{name} experiment", "*" * 20)
             sol_sce_dict, info = run_exp(H_list, error_percent_list, algo)
             res.update({name : info})
