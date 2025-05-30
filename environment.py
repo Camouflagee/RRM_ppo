@@ -6,6 +6,7 @@
 @Author  ：Jiansheng LI
 @Date    ：2023/11/27 14:12 
 '''
+import os
 import time
 ###
 # 1. fading
@@ -325,7 +326,6 @@ class Environment(gym.Env):
         for idx, (xi, yi), in enumerate(zip(base_positions[:, 0], base_positions[:, 1])):
             circle = Circle((xi, yi), self.BSs[idx].BS_Radius, color='darkred', fill=False, linewidth=1.5, alpha=0.6)
             ax.add_patch(circle)
-        print('1')
         # todo radius = 50 ?
         # for idx, (xi, yi), in enumerate(zip(user_original_postions[:, 0], user_original_postions[:, 1])):
         #     circle = Circle((xi, yi), 50, color='darkred', fill=False, linewidth=1, alpha=0.6)
@@ -334,6 +334,7 @@ class Environment(gym.Env):
         ax.set_aspect('equal', adjustable='datalim')
         plt.legend()
         if path is not None:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             plt.savefig(path)
             print('Map figure saved to ' + path)
         plt.show()
@@ -406,7 +407,7 @@ class Environment(gym.Env):
 
             while attempt < max_attempts:
                 # 生成候选位置，基于当前位置的随机移动（步长0到5米）
-                r = 3 * random.uniform(0, 1)
+                r = 5 * random.uniform(0, 1)
                 theta = uniform(-pi, pi)
                 delta_x = r * np.cos(theta)
                 delta_y = r * np.sin(theta)

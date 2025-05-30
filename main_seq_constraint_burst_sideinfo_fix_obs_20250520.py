@@ -155,9 +155,9 @@ if __name__ == '__main__':
     # expName = 'BS1UE20'
     _version = 'seqPPOcons_R2A3_fixobs_mm'
     # load or create environment/model
-    with open('config/MM/config_environment_setting.yaml', 'r') as file:
+    with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    with open('config/MM/config_training_parameters.yaml', 'r') as file:
+    with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     isBurst = False
     isAdaptive = True

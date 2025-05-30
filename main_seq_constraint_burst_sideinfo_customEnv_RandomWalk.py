@@ -52,7 +52,9 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_class
             **tr_args,
         )
     else:
-        tr_args['policy_kwargs'] = {'const_args': env_args}
+        tr_args['policy_kwargs'] = {'const_args': env_args,
+                                    'net_arch': dict(pi=[32,64,32], vf=[128, 128]),
+                                    }
         tr_args.n_steps = collect_rollout_steps
         model = SequencePPO(policy=SequenceActorCriticPolicy, env=env, verbose=1, device='cpu', **tr_args, )
 
@@ -129,9 +131,9 @@ if __name__ == '__main__':
     # expName = 'BS1UE20'
     _version = 'seqPPOcons_RandomWalk'
     # load or create environment/model
-    with open('config/MM/config_environment_setting.yaml', 'r') as file:
+    with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
-    with open('config/MM/config_training_parameters.yaml', 'r') as file:
+    with open('config/config_training_parameters.yaml', 'r') as file:
         _tr_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
     isBurst = False
     use_sideinfo = False
@@ -142,18 +144,21 @@ if __name__ == '__main__':
         _error_percent_list = np.arange(0, 55, 5)/100
         for _error_percent in _error_percent_list[:1]:  # 0.01,0.05,0.1,0.15 #0.05, 0.1, 0.
             print(f'UE{nUE}RB{nRB} training - error_percent: {_error_percent:.2f}')
-            _episode_length = nUE*Nrb
+            _episode_length = nUE*Nrb//2
             _env_args.Nrb = Nrb
             _envName = f'UE{nUE}RB{nRB}'
             _expNo = f'E1_Nrb{_env_args.Nrb}_error_{_error_percent:.2f}'  # same expNo has same initialized model parameters
             _env_args.nUEs = nUE
             _env_args.nRBs = nRB
-            _total_timesteps = 800000
-            _load_env_path = f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
+            _total_timesteps = 400000
+            _load_env_path = \
+                f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
             _load_model_path = None
             trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, RandomWalkSequenceDecisionAdaptiveEnvironmentSB3, _env_args, _tr_args, _load_env_path,
                     _load_model_path, isBurst, burstprob, _error_percent, use_sideinfo)
             print(f'UE{nUE}RB{nRB} training is done')
+            # todo
+            # 继续训练 Experiment_result\seqPPOcons_RandomWalk\UE12RB30\E1_Nrb15_error_0.00\date20250529time231529\model_saves\seqPPOcons_RandomWalk_NumSteps_1601536_.zip
     system_shutdown(500)
 # 问题1:
 # UE少RB多的时候, 在episode_length太长时, 严重影响模型决策

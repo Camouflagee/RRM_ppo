@@ -1079,9 +1079,11 @@ class RandomWalkSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionAdaptiveE
         :param _error_percent:
         :return: the CSI info for other baseline methods
         """
+
         if not given_obs:
+
             CSI_dB_UERB = self.get_new_CSI_dB()
-            if len(CSI_dB_UERB.shape) > 3:
+            if len(CSI_dB_UERB.shape) >= 3:
                 assert CSI_dB_UERB.shape[0] == 1
                 CSI_dB_UERB = CSI_dB_UERB.squeeze(0)  # convert the shape: [BSs=1,UEs,RBs] to shape: [UEs,RBs]
             H_dB = CSI_dB_UERB.reshape(-1, )

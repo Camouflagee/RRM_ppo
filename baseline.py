@@ -7,7 +7,8 @@ import cvxpy as cp
 from networkx.algorithms.bipartite.basic import color
 
 from utils import load_env, get_TimeLogEvalDir
-
+import pickle
+from datetime import datetime
 
 def quadratic_projection(x_u, N_rb):
     """
@@ -469,7 +470,8 @@ if __name__ == '__main__':
 
         print("\n","=" * 10, f"UE{nUE}RB{nRB}场景", "=" * 10)
         # logger = Logger(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/baseline_output.txt')
-        init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
+        # init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
+        init_env = load_env(f'D:\PythonProject\RRM_ppo\Experiment_result\seqPPOcons_RandomWalk\\UE12RB30\ENV\env.zip')
         # ============================
         # 1. 参数设置
         # ============================
@@ -491,11 +493,22 @@ if __name__ == '__main__':
 
         error_percent_list = np.arange(0, 65, 5) / 100 if is_H_estimated else [0]
         # generate the H instance for experiment
+        exNo='E1'
+
+        sample_dir=f'Experiment_result/baseline/allbaseline/map_samples_{exNo}'
+        os.makedirs(sample_dir, exist_ok=True)
         H_list = []
         for test_idx in range(testnum):
             obs, info = env.reset_onlyforbaseline()
+            env.showmap(os.path.join(sample_dir, f'map_{test_idx}.png'))
             H_list.append((obs, info))
+            env.random_walk() # change UE's location randomly
 
+        # 格式：YYYY-MM-DD_HH-MM-SS（推荐，无空格和特殊字符，适合文件名）
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        H_filename = f"H_list_{timestamp}.pkl"
+        with open(os.path.join(sample_dir,H_filename), 'wb') as f:
+            pickle.dump(H_list, f)
 
         def run_exp(_H_list, _error_percent_list, algo):
             sol_sce_dict = {}
@@ -562,7 +575,7 @@ if __name__ == '__main__':
             if idx!=0 :
                 continue
             print("*" * 20, f"{name} experiment", "*" * 20)
-            sol_sce_dict, info = run_exp(H_list, error_percent_list, algo)
+            sol_sce_dict, info = run_exp(H_list, error_percent_list[:1], algo)
             res.update({name : info})
     t2 = time.time()
 
