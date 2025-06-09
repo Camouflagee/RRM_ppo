@@ -45,7 +45,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_class
     save_model_env(time_log_folder, _version, '', None, unwrapped_env)
 
     # 保存env及其环境的图 #episode 2048/180=10 episode → 尝试了十个序列
-    collect_rollout_steps = 2048*10
+    collect_rollout_steps = 2048*5
         # if episode_length * 5 <= 2048 else episode_length * 5
     env = TimeLimit(unwrapped_env, max_episode_steps=episode_length)
     if load_model_path:
@@ -117,14 +117,28 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_class
                                        render=False, verbose=1,
                                        # callback_after_eval=stop_train_callback
                                        )
+    test_env=eval_env
+    res = []
+    num_pair = []
+    test_num = 5
 
-    model.ent_coef = 0.01
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, log_interval=10, callback=eval_callback, reset_num_timesteps=False)
-    model.ent_coef = 0
-    model.learn(total_timesteps=total_timesteps//2, progress_bar=True, log_interval=10, callback=eval_callback, reset_num_timesteps=False)
+    for _ in range(test_num):
+        obs, _ = test_env.reset()
+        # obs, _ = test_env.unwrapped.reset_onlyforbaseline(given_obs=given_obs)
+        truncated = False
+        cnt=0
+        while not truncated:
+            action, _ = model.predict(observation=obs, deterministic=False)
+            obs, reward, terminated, truncated, info = test_env.step(action)
+            cnt+=1
+            if truncated:
+                res.append(reward)
+                num_pair.append(sum(obs[nUE * nRB:-1]))
+    print(np.mean(res), np.mean(num_pair))
+
 
     # train the model
-    split=8
+    split=4
     for _ in range(split):
         model.ent_coef = 0.03
         model.learn(total_timesteps=total_timesteps, progress_bar=True, log_interval=10, callback=eval_callback, reset_num_timesteps=False)
@@ -144,7 +158,7 @@ def trainer(total_timesteps, _version, envName, expNo, episode_length, env_class
 
 if __name__ == '__main__':
     # expName = 'BS1UE20'
-    _version = 'seqPPOcons_RandomWalk'
+    _version = 'seqPPOcons_test'
     # load or create environment/model
     with open('config/config_environment_setting.yaml', 'r') as file:
         _env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
@@ -168,8 +182,7 @@ if __name__ == '__main__':
             _total_timesteps = 200000
             _load_env_path = \
                 f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip'
-            _load_model_path = \
-'Experiment_result/seqPPOcons_RandomWalk/UE12RB30/E1_Nrb15_error_0.00/date20250603time201745/model_saves/seqPPOcons_RandomWalk_NumSteps_1433600_.zip'
+            _load_model_path = 'D:\PythonProject\RRM_ppo\Experiment_result\seqPPOcons_R2A3_fixobs_mm\\UE12RB30\E1_Nrb15_epl_180_error_0.00\date20250425time140544\model_saves\seqPPOcons_R2A3_fixobs_mm_NumSteps_2002944_.zip'
             trainer(_total_timesteps, _version, _envName, _expNo, _episode_length, RandomWalkSequenceDecisionAdaptiveEnvironmentSB3, _env_args, _tr_args, _load_env_path,
                     _load_model_path, isBurst, burstprob, _error_percent, use_sideinfo)
             print(f'UE{nUE}RB{nRB} training is done')

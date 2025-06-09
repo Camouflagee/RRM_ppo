@@ -1,4 +1,4 @@
-learning_rate : 1.0e-3
+learning_rate : 1.0e-4
 n_steps : 2048
 batch_size : 32
 n_epochs : 10

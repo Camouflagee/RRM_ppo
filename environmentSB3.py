@@ -1038,7 +1038,7 @@ class RandomWalkSequenceDecisionAdaptiveEnvironmentSB3(SequenceDecisionAdaptiveE
     def reset(self, seed=None, options=None):
         # 1. generate new CSI
         # if self.history_channel_information is None or self.history_channel_information_error is None:
-        self.random_walk()
+        # self.random_walk()
         CSI_dB_UERB = self.get_new_CSI_dB()
         if len(CSI_dB_UERB.shape) > 3:
             assert CSI_dB_UERB.shape[0] == 1
