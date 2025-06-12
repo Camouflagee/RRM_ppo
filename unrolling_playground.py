@@ -169,7 +169,7 @@ def generate_batch_problem_instance(init_env,env_args, batch_size=32):
 nUE = 12
 nRB = 30
 K_layers = 10  # 展开层数
-n_epochs = 5000
+n_epochs = 0
 batch_size = 1500
 lr = 1e-4
 
@@ -239,3 +239,42 @@ for epoch in range(n_epochs):
 
 # 保存训练好的模型
 torch.save(model.state_dict(), "resource_allocator.pth")
+
+# 1. 首先确保你有相同的模型定义
+model = UnrolledResourceAllocator(
+    K_layers=K_layers,
+    nUE=nUE,
+    nRB=nRB,
+    init_eta=0.1
+)
+
+# 2. 加载保存的模型参数
+model.load_state_dict(torch.load("resource_allocator.pth"))
+
+# 3. 将模型设置为评估模式（如果你只是用来推理而不是继续训练）
+model.eval()
+
+# 使用示例（假设你有新的输入数据）
+# 生成新的问题实例（或使用你自己的数据）
+H_np, P_np, n0_np = generate_batch_problem_instance(init_env, env_args, batch_size=1)
+
+# 转换为PyTorch张量
+H = torch.tensor(H_np, dtype=torch.float32)
+P = torch.tensor(P_np, dtype=torch.float32)
+n0 = torch.tensor(n0_np, dtype=torch.float32)
+
+# 初始化a（均匀分配）
+a_init = torch.full((1, nUE, nRB), 0.5)  # batch_size=1
+
+# 前向传播（推理）
+with torch.no_grad():  # 禁用梯度计算以节省内存
+    a_out = model(a_init, H, P, n0)
+
+    # 计算速率
+    interference = torch.sum(a_out * P * H, dim=1, keepdim=True)
+    I = n0.view(1, 1, 1) + interference - a_out * P * H
+    SINR = (a_out * P * H) / (I + 1e-20)
+    rate = torch.sum(torch.log(1 + SINR), dim=(1, 2))
+
+    # print(f"Allocated resources: {a_out.squeeze().numpy()}")
+    print(f"Achieved rate: {rate.item():.4f} Mbps")
