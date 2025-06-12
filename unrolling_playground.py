@@ -5,7 +5,7 @@ import torch
 
 from utils import DotDic, load_env
 
-def generate_problem_instance():
+def generate_problem_instance(init_env, env_args):
     """
     生成无线通信系统的信道状态信息
 
@@ -15,16 +15,11 @@ def generate_problem_instance():
         n0: 噪声功率 (标量)
         N_rb: 每个用户的最大资源块数 (标量)
     """
-    # 加载环境配置
-    with open('config/config_environment_setting.yaml', 'r') as file:
-        env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
 
-    sce = env_args
     # 选择特定场景 (UE=12, RB=30)
     nUE, nRB = 12, 30
+    # 加载环境配置
 
-    # 加载预训练环境
-    init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
     env = init_env
 
     # 获取系统参数
@@ -145,7 +140,7 @@ class UnrolledResourceAllocator(nn.Module):
 
         return a
 
-def generate_batch_problem_instance(batch_size=32):
+def generate_batch_problem_instance(init_env,env_args, batch_size=32):
     """
     批量生成问题实例
 
@@ -162,7 +157,7 @@ def generate_batch_problem_instance(batch_size=32):
     batch_n0 = []
 
     for _ in range(batch_size):
-        H, P, n0 = generate_problem_instance()  # 调用原始单实例函数
+        H, P, n0 = generate_problem_instance(init_env, env_args)  # 调用原始单实例函数
         batch_H.append(H)
         batch_P.append(P)
         batch_n0.append(n0)
@@ -174,8 +169,8 @@ def generate_batch_problem_instance(batch_size=32):
 nUE = 12
 nRB = 30
 K_layers = 10  # 展开层数
-n_epochs = 500
-batch_size = 16
+n_epochs = 5000
+batch_size = 1500
 lr = 1e-4
 
 # 初始化网络
@@ -186,11 +181,15 @@ model = UnrolledResourceAllocator(
     init_eta=0.1
 )
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+with open('config/config_environment_setting.yaml', 'r') as file:
+    env_args = DotDic(yaml.load(file, Loader=yaml.FullLoader))
 
+# 加载预训练环境
+init_env = load_env(f'Experiment_result/seqPPOcons/UE{nUE}RB{nRB}/ENV/env.zip')
 # 训练循环
 for epoch in range(n_epochs):
     # 生成批量问题实例
-    H_np, P_np, n0_np = generate_batch_problem_instance(batch_size)
+    H_np, P_np, n0_np = generate_batch_problem_instance(init_env, env_args, batch_size)
 
     # 转换为PyTorch张量
     H = torch.tensor(H_np, dtype=torch.float32)
@@ -222,7 +221,7 @@ for epoch in range(n_epochs):
 
     # 总速率
     rate = torch.sum(torch.log(1 + SINR), dim=(1, 2))
-    objective = torch.sum(rate)//10**6  # 最大化平均速率
+    objective = torch.sum(rate)/10**6  # 最大化平均速率
 
     # 损失函数（最小化负速率）
     loss = -objective
