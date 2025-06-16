@@ -48,8 +48,8 @@ for idx, (nUE, nRB) in enumerate(
     w = np.zeros((K, U))
 
     # 迭代更新参数
-    max_iters = 500  # 最大迭代次数
-    step_size_a = 0.05  # 用于 a 更新的步长（梯度上升）
+    max_iters = 50  # 最大迭代次数
+    step_size_a = 0.1 # 用于 a 更新的步长（梯度上升）
     eps = 1e-10  # 防止除 0
 
     # 用于记录目标函数值变化（在二次变换下的目标）

@@ -313,7 +313,7 @@ class SequenceDecisionEnvironmentSB3(Environment):
         for b_index, b in enumerate(self.BSs):
             for global_u_index in range(self.nUE):  # notice that UE_id starts from 1
                 for rb_index in range(self.sce.nRBs):
-                    a_b_k_u = action[b_index, global_u_index, rb_index]  # todo working right now
+                    a_b_k_u = action[b_index, global_u_index, rb_index]
                     if get_new_CSI:
                         _, channel_power_dBm = self.test_cal_Receive_Power(b, self.distance_matrix[b_index][
                             global_u_index])
